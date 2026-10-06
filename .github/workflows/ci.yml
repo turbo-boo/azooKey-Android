@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 jobs:
-  core-tests:
+  unit-tests:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -34,5 +34,5 @@ jobs:
         with:
           gradle-version: "9.6.0"
 
-      - name: Run core unit tests
-        run: gradle --stacktrace :core:testDebugUnitTest
+      - name: Run unit tests
+        run: gradle --stacktrace :core:testDebugUnitTest :app:testDebugUnitTest

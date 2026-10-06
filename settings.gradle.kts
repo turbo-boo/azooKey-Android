@@ -16,3 +16,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "azooKey-Android"
 include(":core")
+include(":app")
