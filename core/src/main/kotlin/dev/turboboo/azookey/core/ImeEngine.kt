@@ -36,6 +36,24 @@ class ImeEngine {
         return listOf(EditorCommand.SetComposingText(composingText))
     }
 
+    fun changeLastCharacterType(): List<EditorCommand> {
+        if (composingText.isEmpty()) {
+            return emptyList()
+        }
+
+        val lastCodePointStart = composingText.offsetByCodePoints(composingText.length, -1)
+        val prefix = composingText.substring(0, lastCodePointStart)
+        val lastCharacter = composingText.substring(lastCodePointStart)
+        val replacement = KanaCharacterTransformer.transform(lastCharacter)
+
+        if (replacement == lastCharacter) {
+            return emptyList()
+        }
+
+        composingText = prefix + replacement
+        return listOf(EditorCommand.SetComposingText(composingText))
+    }
+
     fun commit(): List<EditorCommand> {
         if (composingText.isEmpty()) {
             return emptyList()
