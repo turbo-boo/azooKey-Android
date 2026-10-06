@@ -57,6 +57,7 @@ class EditorCommandExecutorTest {
         assertEquals(
             listOf(
                 "deleteCodePoints:1:0",
+                "getBefore:2",
                 "deleteUtf16:1:0",
             ),
             connection.calls,

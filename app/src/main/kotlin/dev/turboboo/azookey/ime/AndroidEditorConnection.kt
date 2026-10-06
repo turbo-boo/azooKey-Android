@@ -19,6 +19,9 @@ class AndroidEditorConnection(
         afterLength,
     )
 
+    override fun getTextBeforeCursor(maxChars: Int): CharSequence? =
+        inputConnection.getTextBeforeCursor(maxChars, 0)
+
     override fun deleteSurroundingText(
         beforeLength: Int,
         afterLength: Int,
