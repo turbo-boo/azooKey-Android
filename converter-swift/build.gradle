@@ -1,5 +1,3 @@
-import java.nio.file.*
-
 plugins {
     id 'com.android.library'
 }
@@ -48,7 +46,7 @@ def getSwiftlyPath() {
     )
 }
 
-def getSwiftSDKPath() {
+def getSwiftSDKRoot() {
     def fromConfig = project.findProperty('swift.sdk.path') ?: System.getenv('SWIFT_SDK_PATH')
     if (fromConfig) {
         return file(fromConfig)
@@ -118,7 +116,6 @@ def generatedJniLibsDir = layout.buildDirectory.dir('generated/jniLibs')
 def generatedJavaDir = layout.projectDirectory.dir(
     '.build/plugins/outputs/converter-swift/AzooKeyAndroidJNI/destination/JExtractSwiftPlugin/src/generated/java'
 )
-def swiftSdkPath = "${getSwiftSDKPath().absolutePath}/${sdkName}"
 
 def buildSwiftAll = tasks.register('buildSwiftAll') {
     group = 'build'
@@ -170,14 +167,20 @@ def copyJniLibs = tasks.register('copyJniLibs', Copy) {
             into(abi)
         }
 
-        from(file(
-            "${swiftSdkPath}/swift-android/ndk-sysroot/usr/lib/${info.ndkDirectory}/libc++_shared.so"
-        )) {
+        from({
+            file(
+                "${getSwiftSDKRoot().absolutePath}/${sdkName}/swift-android/ndk-sysroot/usr/lib/${info.ndkDirectory}/libc++_shared.so"
+            )
+        }) {
             into(abi)
         }
 
-        from(swiftRuntimeLibs.collect { libName ->
-            "${swiftSdkPath}/swift-android/swift-resources/usr/lib/${info.androidSdkLibDirectory}/android/lib${libName}.so"
+        from({
+            swiftRuntimeLibs.collect { libName ->
+                file(
+                    "${getSwiftSDKRoot().absolutePath}/${sdkName}/swift-android/swift-resources/usr/lib/${info.androidSdkLibDirectory}/android/lib${libName}.so"
+                )
+            }
         }) {
             into(abi)
         }
