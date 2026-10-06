@@ -1,5 +1,15 @@
 package dev.turboboo.azookey.core
 
+/*
+ * The Japanese flick key variations are ported from azooKey.
+ *
+ * Original implementation:
+ *   azooKey/azooKey
+ *   AzooKeyCore/Sources/KeyboardViews/Custard/FlickJapaneseCustard.swift
+ * Original author: Keita Miwa (ensan)
+ * License: MIT
+ */
+
 data class FlickKey(
     val center: String,
     val left: String? = null,
@@ -16,19 +26,6 @@ data class FlickKey(
     }
 }
 
-/*
- * Kana/flick assignments are ported from azooKey's built-in Japanese flick Custard.
- *
- * Upstream:
- *   azooKey/azooKey
- *   AzooKeyCore/Sources/KeyboardViews/Custard/FlickJapaneseCustard.swift
- * Upstream implementation author: Miwa (ensan-hcl)
- * Source commit introducing the current Custard implementation:
- *   a3b1a3a3b52d91bdae2846461e778797d3ea5016
- *
- * Copyright (c) 2020-2023 Keita Miwa (ensan).
- * Licensed under the MIT License. See THIRD_PARTY_NOTICES.md.
- */
 object JapaneseFlickLayout {
     val kanaKeys: List<FlickKey> = listOf(
         FlickKey(center = "あ", left = "い", top = "う", right = "え", bottom = "お"),
@@ -43,7 +40,7 @@ object JapaneseFlickLayout {
         FlickKey(center = "わ", left = "を", top = "ん", right = "ー"),
     )
 
-    private val keysByCenter = kanaKeys.associateBy(FlickKey::center)
+    private val byCenter = kanaKeys.associateBy(FlickKey::center)
 
-    fun key(center: String): FlickKey? = keysByCenter[center]
+    fun key(center: String): FlickKey? = byCenter[center]
 }

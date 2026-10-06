@@ -1,7 +1,18 @@
 package dev.turboboo.azookey.core
 
 import kotlin.math.abs
-import kotlin.math.hypot
+
+/*
+ * Direction classification is adapted from azooKey.
+ *
+ * Original implementation:
+ *   azooKey/azooKey
+ *   AzooKeyCore/Sources/KeyboardViews/extension CGPoint.swift
+ * Original author: Keita Miwa (ensan)
+ * License: MIT
+ *
+ * Android-specific threshold handling and data types are original to this port.
+ */
 
 data class PointF2(
     val x: Float,
@@ -16,30 +27,19 @@ enum class FlickDirection {
     BOTTOM,
 }
 
-/*
- * Direction selection is ported from azooKey's CGPoint.direction(to:) behavior.
- *
- * Upstream:
- *   azooKey/azooKey
- *   AzooKeyCore/Sources/KeyboardViews/extension CGPoint.swift
- * Original author: Keita Miwa (ensan)
- * Created: 2020-04-09
- *
- * Copyright (c) 2020-2023 Keita Miwa (ensan).
- * Licensed under the MIT License. See THIRD_PARTY_NOTICES.md.
- */
 class FlickDirectionResolver(
     private val thresholdPx: Float,
 ) {
     init {
-        require(thresholdPx >= 0f)
+        require(thresholdPx > 0f) { "thresholdPx must be positive" }
     }
 
     fun resolve(start: PointF2, end: PointF2): FlickDirection {
         val dx = end.x - start.x
         val dy = end.y - start.y
+        val distanceSquared = dx * dx + dy * dy
 
-        if (hypot(dx.toDouble(), dy.toDouble()) < thresholdPx) {
+        if (distanceSquared < thresholdPx * thresholdPx) {
             return FlickDirection.CENTER
         }
 
@@ -52,11 +52,9 @@ class FlickDirectionResolver(
         if (dy > 0f && abs(dx) < dy) {
             return FlickDirection.BOTTOM
         }
-        if (dy < 0f && abs(dx) < -dy) {
-            return FlickDirection.TOP
-        }
 
-        // Match azooKey's boundary fallback.
+        // Match azooKey's direction behavior for the remaining case,
+        // including exact diagonals.
         return FlickDirection.TOP
     }
 }
