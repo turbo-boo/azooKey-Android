@@ -122,6 +122,11 @@ def dictionarySourceDir = layout.projectDirectory.dir(
         'KanaKanjiConverterModuleWithDefaultDictionary/' +
         'azooKey_dictionary_storage/Dictionary'
 )
+def dictionaryLicenseFile = layout.projectDirectory.file(
+    '.build/checkouts/AzooKeyKanaKanjiConverter/Sources/' +
+        'KanaKanjiConverterModuleWithDefaultDictionary/' +
+        'azooKey_dictionary_storage/LICENSE'
+)
 
 def buildSwiftAll = tasks.register('buildSwiftAll') {
     group = 'build'
@@ -204,10 +209,19 @@ def copyDictionaryAssets = tasks.register('copyDictionaryAssets', Copy) {
                 "Pinned azooKey dictionary checkout is missing: ${dictionarySourceDir.asFile}"
             )
         }
+        if (!dictionaryLicenseFile.asFile.isFile()) {
+            throw new GradleException(
+                "Pinned azooKey dictionary license is missing: ${dictionaryLicenseFile.asFile}"
+            )
+        }
     }
 
     from(dictionarySourceDir.asFile) {
         into('azookey_dictionary')
+    }
+    from(dictionaryLicenseFile.asFile) {
+        into('third_party')
+        rename { 'azooKey_dictionary_storage-LICENSE.txt' }
     }
     into(generatedAssetsDir)
 }

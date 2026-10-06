@@ -9,7 +9,7 @@ This project references and ports behavior from:
 
 azooKey is distributed under the MIT License.
 
-Copyright (c) 2020-2023 Keita Miwa (ensan).
+Copyright (c) 2020-2025 Keita Miwa (ensan).
 
 When a source file in this repository is derived from a specific azooKey
 implementation, that file must include a source-path attribution comment.
@@ -33,3 +33,19 @@ The full upstream MIT license notice is retained here:
 > FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 > AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 > LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE.
+
+## azooKey_dictionary_storage
+
+The default kana-kanji dictionary bundled into Android build artifacts comes
+from:
+
+- https://github.com/azooKey/azooKey_dictionary_storage
+- pinned revision: `4d418525b090cf49c219819d05a7e3cc2a4346eb`
+
+The dictionary is distributed under the Apache License 2.0.
+
+Copyright 2024 Miwa / ensan.
+
+The unmodified upstream Apache-2.0 license is copied from the pinned checkout
+into Android artifacts at
+`assets/third_party/azooKey_dictionary_storage-LICENSE.txt`.

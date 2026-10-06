@@ -4,8 +4,11 @@ on:
   push:
     branches:
       - main
-      - "feat/**"
   pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -203,6 +206,10 @@ jobs:
 
           unzip -l "$aar" | grep -q 'assets/azookey_dictionary/'
           unzip -l "$apk" | grep -q 'assets/azookey_dictionary/'
+          unzip -p "$aar" assets/third_party/azooKey_dictionary_storage-LICENSE.txt \
+            | grep -q 'Apache License'
+          unzip -p "$apk" assets/third_party/azooKey_dictionary_storage-LICENSE.txt \
+            | grep -q 'Apache License'
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
