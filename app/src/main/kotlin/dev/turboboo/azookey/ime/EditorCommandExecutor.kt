@@ -14,6 +14,29 @@ class EditorCommandExecutor {
         commands: List<EditorCommand>,
         connection: EditorConnection,
     ) {
-        // Implemented after the behavior tests are confirmed red.
+        commands.forEach { command ->
+            when (command) {
+                is EditorCommand.SetComposingText -> {
+                    connection.setComposingText(command.text)
+                }
+
+                is EditorCommand.CommitText -> {
+                    connection.commitText(command.text)
+                }
+
+                is EditorCommand.DeleteSurroundingText -> {
+                    val deletedByCodePoint = connection.deleteSurroundingTextInCodePoints(
+                        beforeLength = command.beforeCodePoints,
+                        afterLength = command.afterCodePoints,
+                    )
+                    if (!deletedByCodePoint) {
+                        connection.deleteSurroundingText(
+                            beforeLength = command.beforeCodePoints,
+                            afterLength = command.afterCodePoints,
+                        )
+                    }
+                }
+            }
+        }
     }
 }
