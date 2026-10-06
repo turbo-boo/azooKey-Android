@@ -29,6 +29,10 @@ class AzooKeyInputMethodService : InputMethodService() {
                     withEditorConnection { controller.input(text, it) }
                 }
 
+                override fun onCandidate(text: String) {
+                    withEditorConnection { controller.selectCandidate(text, it) }
+                }
+
                 override fun onDelete() {
                     withEditorConnection { controller.backspace(it) }
                 }
