@@ -33,6 +33,8 @@ class ImeEngine {
         return listOf(EditorCommand.SetComposingText(composingText))
     }
 
+    fun changeLastCharacterType(): List<EditorCommand> = emptyList()
+
     fun commit(): List<EditorCommand> {
         if (composingText.isEmpty()) {
             return emptyList()
