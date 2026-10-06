@@ -52,7 +52,8 @@ class EditorCommandExecutor {
             return 0
         }
 
-        val maxUtf16Chars = codePointCount * Character.MAX_VALUE.code.coerceAtMost(2)
+        // A Unicode code point occupies at most two UTF-16 code units.
+        val maxUtf16Chars = codePointCount.coerceAtMost(Int.MAX_VALUE / 2) * 2
         val text = connection.getTextBeforeCursor(maxUtf16Chars)?.toString()
             ?: return codePointCount
 
