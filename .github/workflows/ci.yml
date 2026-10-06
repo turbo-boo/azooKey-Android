@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 jobs:
-  android-tests:
+  core-tests:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -33,21 +33,11 @@ jobs:
         with:
           gradle-version: "9.6.0"
 
-      - name: Run unit tests
-        run: gradle --stacktrace :core:testDebugUnitTest :app:testDebugUnitTest
+      - name: Run core unit tests
+        run: gradle --stacktrace :core:testDebugUnitTest
 
-      - name: Run Android lint
-        run: gradle --stacktrace :core:lintDebug :app:lintDebug
-
-      - name: Assemble debug APK
-        run: gradle --stacktrace :app:assembleDebug
-
-      - name: Upload debug APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: azookey-android-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
+      - name: Run core Android lint
+        run: gradle --stacktrace :core:lintDebug
 
   swift-converter-tests:
     runs-on: ubuntu-latest
@@ -61,9 +51,9 @@ jobs:
       - name: Test converter wrapper
         run: swift test --package-path converter-swift
 
-  swift-android-build:
+  android-integration:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 50
     env:
       NDK_VERSION: r30
       REQUESTED_SWIFT_VERSION: "6.4"
@@ -85,14 +75,19 @@ jobs:
           ARCH="$(uname -m)"
           curl -L -O --retry 3 "https://download.swift.org/swiftly/linux/swiftly-${ARCH}.tar.gz"
           tar -xzf "swiftly-${ARCH}.tar.gz"
-          ./swiftly init             --assume-yes             --skip-install             --no-modify-profile             --quiet-shell-followup
+          ./swiftly init \
+            --assume-yes \
+            --skip-install \
+            --no-modify-profile \
+            --quiet-shell-followup
           echo "$HOME/.local/share/swiftly/bin" >> "$GITHUB_PATH"
 
       - name: Install Android NDK
         shell: bash
         run: |
           set -euxo pipefail
-          curl -L -o ndk.zip --retry 3             "https://dl.google.com/android/repository/android-ndk-${NDK_VERSION}-linux.zip"
+          curl -L -o ndk.zip --retry 3 \
+            "https://dl.google.com/android/repository/android-ndk-${NDK_VERSION}-linux.zip"
           unzip -q ndk.zip -d "$HOME"
           echo "ANDROID_NDK_HOME=$HOME/android-ndk-${NDK_VERSION}" >> "$GITHUB_ENV"
 
@@ -102,14 +97,16 @@ jobs:
         run: |
           set -euxo pipefail
           releases_json="$(curl -fsSL https://www.swift.org/api/v1/install/releases.json)"
-          latest_version="$(echo "$releases_json" | jq -r --arg v "$REQUESTED_SWIFT_VERSION"             '[.[] | select(.name | startswith($v))]
+          latest_version="$(echo "$releases_json" | jq -r --arg v "$REQUESTED_SWIFT_VERSION" \
+            '[.[] | select(.name | startswith($v))]
              | sort_by(.name | split(".") | map(tonumber? // 0))
              | last
              | .name')"
           test -n "$latest_version"
           test "$latest_version" != "null"
 
-          checksum="$(echo "$releases_json" | jq -r --arg v "$latest_version"             '.[] | select(.name == $v)
+          checksum="$(echo "$releases_json" | jq -r --arg v "$latest_version" \
+            '.[] | select(.name == $v)
              | .platforms[]
              | select(.platform == "android-sdk")
              | .checksum')"
@@ -128,7 +125,9 @@ jobs:
         run: |
           set -euxo pipefail
           swiftly install "${{ steps.swift-sdk.outputs.version }}"
-          swift sdk install             "${{ steps.swift-sdk.outputs.url }}"             --checksum "${{ steps.swift-sdk.outputs.checksum }}"
+          swift sdk install \
+            "${{ steps.swift-sdk.outputs.url }}" \
+            --checksum "${{ steps.swift-sdk.outputs.checksum }}"
           swift --version
           swift sdk list
 
@@ -156,7 +155,9 @@ jobs:
       - name: Publish SwiftKit Core to Maven local
         working-directory: converter-swift
         run: |
-          ./.build/checkouts/swift-java/gradlew             --project-dir .build/checkouts/swift-java             :SwiftKitCore:publishToMavenLocal
+          ./.build/checkouts/swift-java/gradlew \
+            --project-dir .build/checkouts/swift-java \
+            :SwiftKitCore:publishToMavenLocal
 
       - name: Set up JDK 17 for Android Gradle Plugin
         uses: actions/setup-java@v5
@@ -175,20 +176,40 @@ jobs:
         with:
           gradle-version: "9.6.0"
 
-      - name: Build Swift Android AAR
-        run: gradle --stacktrace :converter-swift:assembleDebug
+      - name: Run app tests, lint, and Android build
+        run: |
+          gradle --stacktrace \
+            :converter-swift:assembleDebug \
+            :app:testDebugUnitTest \
+            :app:lintDebug \
+            :app:assembleDebug
 
-      - name: Verify Swift Android AAR contents
+      - name: Verify packaged converter and APK
         shell: bash
         run: |
           set -euxo pipefail
           aar="converter-swift/build/outputs/aar/converter-swift-debug.aar"
+          apk="app/build/outputs/apk/debug/app-debug.apk"
+
           for abi in arm64-v8a armeabi-v7a x86_64; do
             unzip -l "$aar" | grep -q "jni/$abi/libAzooKeyAndroidJNI.so"
             unzip -l "$aar" | grep -q "jni/$abi/libSwiftJava.so"
+            unzip -l "$apk" | grep -q "lib/$abi/libAzooKeyAndroidJNI.so"
           done
+
           unzip -p "$aar" classes.jar > "$RUNNER_TEMP/converter-classes.jar"
-          jar tf "$RUNNER_TEMP/converter-classes.jar"             | grep -qx 'dev/turboboo/azookey/converter/AzooKeyAndroidJNI.class'
+          jar tf "$RUNNER_TEMP/converter-classes.jar" \
+            | grep -qx 'dev/turboboo/azookey/converter/AzooKeyAndroidJNI.class'
+
+          unzip -l "$aar" | grep -q 'assets/azookey_dictionary/'
+          unzip -l "$apk" | grep -q 'assets/azookey_dictionary/'
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: azookey-android-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
 
       - name: Upload Swift Android AAR
         uses: actions/upload-artifact@v4

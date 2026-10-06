@@ -113,8 +113,14 @@ def abis = [
 ]
 
 def generatedJniLibsDir = layout.buildDirectory.dir('generated/jniLibs')
+def generatedAssetsDir = layout.buildDirectory.dir('generated/assets')
 def generatedJavaDir = layout.projectDirectory.dir(
     '.build/plugins/outputs/converter-swift/AzooKeyAndroidJNI/destination/JExtractSwiftPlugin/src/generated/java'
+)
+def dictionarySourceDir = layout.projectDirectory.dir(
+    '.build/checkouts/AzooKeyKanaKanjiConverter/Sources/' +
+        'KanaKanjiConverterModuleWithDefaultDictionary/' +
+        'azooKey_dictionary_storage/Dictionary'
 )
 
 def buildSwiftAll = tasks.register('buildSwiftAll') {
@@ -189,6 +195,23 @@ def copyJniLibs = tasks.register('copyJniLibs', Copy) {
     into(generatedJniLibsDir)
 }
 
+def copyDictionaryAssets = tasks.register('copyDictionaryAssets', Copy) {
+    dependsOn(buildSwiftAll)
+
+    doFirst {
+        if (!dictionarySourceDir.asFile.isDirectory()) {
+            throw new GradleException(
+                "Pinned azooKey dictionary checkout is missing: ${dictionarySourceDir.asFile}"
+            )
+        }
+    }
+
+    from(dictionarySourceDir.asFile) {
+        into('azookey_dictionary')
+    }
+    into(generatedAssetsDir)
+}
+
 android {
     sourceSets {
         main {
@@ -198,8 +221,11 @@ android {
             jniLibs {
                 srcDir(generatedJniLibsDir.get().asFile)
             }
+            assets {
+                srcDir(generatedAssetsDir.get().asFile)
+            }
         }
     }
 }
 
-preBuild.dependsOn(copyJniLibs)
+preBuild.dependsOn(copyJniLibs, copyDictionaryAssets)
