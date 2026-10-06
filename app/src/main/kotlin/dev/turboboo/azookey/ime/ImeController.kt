@@ -14,6 +14,8 @@ class ImeController(
         executor.execute(engine.backspace(), connection)
     }
 
+    fun changeCharacterType(connection: EditorConnection) = Unit
+
     fun commit(connection: EditorConnection) {
         executor.execute(engine.commit(), connection)
     }
