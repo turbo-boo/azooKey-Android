@@ -77,6 +77,74 @@ class JapaneseFlickKeyboardViewTest {
         assertEquals(countAfterRelease, callbacks.deleteCount)
     }
 
+    @Test
+    fun latinTabUsesAzooKeyEnglishFlickLayout() {
+        val callbacks = RecordingCallbacks()
+        val view = createView(callbacks)
+
+        findButton(view, "ABC").performClick()
+        val ghi = findButton(view, "GHI")
+
+        gesture(
+            ghi,
+            MotionEvent.ACTION_DOWN to Point(400f, 200f),
+            MotionEvent.ACTION_UP to Point(400f, 200f),
+        )
+        gesture(
+            ghi,
+            MotionEvent.ACTION_DOWN to Point(400f, 200f),
+            MotionEvent.ACTION_UP to Point(0f, 200f),
+        )
+
+        assertEquals(listOf("g", "h"), callbacks.textInputs)
+    }
+
+    @Test
+    fun latinUpperLowerKeyTogglesLetterOutput() {
+        val callbacks = RecordingCallbacks()
+        val view = createView(callbacks)
+
+        findButton(view, "ABC").performClick()
+        findButton(view, "a/A").performClick()
+        findButton(view, "GHI").performClick()
+
+        assertEquals(listOf("G"), callbacks.textInputs)
+    }
+
+    @Test
+    fun numberSymbolsTabUsesAzooKeyNumberFlickLayout() {
+        val callbacks = RecordingCallbacks()
+        val view = createView(callbacks)
+
+        findButton(view, "☆123").performClick()
+        val one = findButton(view, "1☆♪→")
+
+        gesture(
+            one,
+            MotionEvent.ACTION_DOWN to Point(400f, 200f),
+            MotionEvent.ACTION_UP to Point(400f, 200f),
+        )
+        gesture(
+            one,
+            MotionEvent.ACTION_DOWN to Point(400f, 200f),
+            MotionEvent.ACTION_UP to Point(0f, 200f),
+        )
+
+        assertEquals(listOf("1", "☆"), callbacks.textInputs)
+    }
+
+    @Test
+    fun hiraganaTabReturnsFromAnotherMode() {
+        val callbacks = RecordingCallbacks()
+        val view = createView(callbacks)
+
+        findButton(view, "ABC").performClick()
+        findButton(view, "あいう").performClick()
+        findButton(view, "あ").performClick()
+
+        assertEquals(listOf("あ"), callbacks.textInputs)
+    }
+
     private fun createView(callbacks: RecordingCallbacks): JapaneseFlickKeyboardView {
         val context: Context = RuntimeEnvironment.getApplication()
         return JapaneseFlickKeyboardView(context, callbacks)
