@@ -58,4 +58,27 @@ class ImeEngineTest {
         assertEquals("", engine.composingText)
         assertTrue(engine.commit().isEmpty())
     }
+
+    @Test
+    fun commitCandidateReplacesCompositionAndClearsState() {
+        val engine = ImeEngine()
+        engine.input("かな")
+
+        assertEquals(
+            listOf(EditorCommand.CommitText("仮名")),
+            engine.commitCandidate("仮名"),
+        )
+        assertEquals("", engine.composingText)
+    }
+
+    @Test
+    fun commitCandidateRequiresCompositionAndNonEmptyCandidate() {
+        val engine = ImeEngine()
+
+        assertTrue(engine.commitCandidate("仮名").isEmpty())
+
+        engine.input("かな")
+        assertTrue(engine.commitCandidate("").isEmpty())
+        assertEquals("かな", engine.composingText)
+    }
 }

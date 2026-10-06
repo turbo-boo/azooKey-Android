@@ -57,6 +57,21 @@ class ImeControllerTest {
     }
 
     @Test
+    fun candidateSelectionCommitsReplacementAndClearsComposition() {
+        val connection = RecordingEditorConnection()
+        val controller = ImeController()
+
+        controller.input("かな", connection)
+        assertEquals("かな", controller.composingText)
+
+        connection.calls.clear()
+        controller.selectCandidate("仮名", connection)
+
+        assertEquals(listOf("commit:仮名"), connection.calls)
+        assertEquals("", controller.composingText)
+    }
+
+    @Test
     fun spaceCommitsCompositionBeforeInsertingSpace() {
         val connection = RecordingEditorConnection()
         val controller = ImeController()

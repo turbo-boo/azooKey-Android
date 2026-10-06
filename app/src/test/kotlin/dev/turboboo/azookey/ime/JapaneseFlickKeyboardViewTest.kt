@@ -57,6 +57,17 @@ class JapaneseFlickKeyboardViewTest {
     }
 
     @Test
+    fun candidateButtonsReachCandidateCallback() {
+        val callbacks = RecordingCallbacks()
+        val view = createView(callbacks)
+
+        view.setCandidates(listOf("仮名", "かな"))
+        findButton(view, "仮名").performClick()
+
+        assertEquals(listOf("仮名"), callbacks.candidateSelections)
+    }
+
+    @Test
     fun deleteLongPressRepeatsAndStopsOnRelease() {
         val callbacks = RecordingCallbacks()
         val view = createView(callbacks)
@@ -197,10 +208,15 @@ class JapaneseFlickKeyboardViewTest {
 
     private class RecordingCallbacks : JapaneseFlickKeyboardView.Callbacks {
         val textInputs = mutableListOf<String>()
+        val candidateSelections = mutableListOf<String>()
         var deleteCount = 0
 
         override fun onText(text: String) {
             textInputs += text
+        }
+
+        override fun onCandidate(text: String) {
+            candidateSelections += text
         }
 
         override fun onDelete() {
