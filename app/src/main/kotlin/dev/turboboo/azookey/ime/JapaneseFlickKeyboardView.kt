@@ -2,10 +2,13 @@ package dev.turboboo.azookey.ime
 
 import android.content.Context
 import android.graphics.Color
+import android.os.Handler
+import android.os.Looper
 import android.util.AttributeSet
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.GridLayout
@@ -83,7 +86,7 @@ class JapaneseFlickKeyboardView(
             addFlickKey(kana("あ"), row = 0, column = 1)
             addFlickKey(kana("か"), row = 0, column = 2)
             addFlickKey(kana("さ"), row = 0, column = 3)
-            addSpecialKey("⌫", row = 0, column = 4, onClick = callbacks::onDelete)
+            addRepeatingDeleteKey(row = 0, column = 4)
 
             addSpecialKey("ABC", row = 1, column = 0, enabled = false)
             addFlickKey(kana("た"), row = 1, column = 1)
@@ -119,6 +122,20 @@ class JapaneseFlickKeyboardView(
                 context = context,
                 key = key,
                 onInput = callbacks::onText,
+            ),
+            keyLayoutParams(row, column),
+        )
+    }
+
+    private fun GridLayout.addRepeatingDeleteKey(
+        row: Int,
+        column: Int,
+    ) {
+        addView(
+            RepeatingActionButton(
+                context = context,
+                label = "⌫",
+                onAction = callbacks::onDelete,
             ),
             keyLayoutParams(row, column),
         )
@@ -231,5 +248,86 @@ private class FlickKeyButton @JvmOverloads constructor(
         super.performClick()
         onInput(key.center)
         return true
+    }
+}
+
+/*
+ * azooKey's built-in flick delete key repeats delete while long-pressed.
+ * The Android scheduling implementation is local to this port.
+ *
+ * Upstream:
+ *   azooKey/azooKey
+ *   AzooKeyCore/Sources/CustardKit/CustardKit.swift
+ * Original implementation author: Keita Miwa (ensan)
+ * License: MIT
+ */
+private class RepeatingActionButton(
+    context: Context,
+    label: String,
+    private val onAction: () -> Unit,
+) : Button(context) {
+    private val controller = RepeatingPressController(
+        initialDelayMillis = ViewConfiguration.getLongPressTimeout().toLong(),
+        repeatIntervalMillis = 60L,
+        scheduler = HandlerRepeatScheduler(Handler(Looper.getMainLooper())),
+        onTap = ::performClick,
+        onRepeat = onAction,
+    )
+
+    init {
+        text = label
+        isAllCaps = false
+        textSize = 15f
+        gravity = Gravity.CENTER
+        setPadding(0, 0, 0, 0)
+
+        setOnTouchListener { _, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    isPressed = true
+                    controller.onDown()
+                    true
+                }
+
+                MotionEvent.ACTION_UP -> {
+                    isPressed = false
+                    controller.onUp()
+                    true
+                }
+
+                MotionEvent.ACTION_CANCEL -> {
+                    isPressed = false
+                    controller.onCancel()
+                    true
+                }
+
+                else -> true
+            }
+        }
+    }
+
+    override fun performClick(): Boolean {
+        super.performClick()
+        onAction()
+        return true
+    }
+
+    override fun onDetachedFromWindow() {
+        controller.onCancel()
+        super.onDetachedFromWindow()
+    }
+}
+
+private class HandlerRepeatScheduler(
+    private val handler: Handler,
+) : RepeatScheduler {
+    override fun schedule(delayMillis: Long, action: () -> Unit): RepeatTask {
+        val runnable = Runnable(action)
+        handler.postDelayed(runnable, delayMillis)
+        return object : RepeatTask {
+            override fun cancel() {
+                handler.removeCallbacks(runnable)
+            }
+        }
     }
 }
