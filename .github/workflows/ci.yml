@@ -48,3 +48,15 @@ jobs:
           name: azookey-android-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+
+  swift-converter-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Show Swift version
+        run: swift --version
+
+      - name: Test converter wrapper
+        run: swift test --package-path converter-swift
