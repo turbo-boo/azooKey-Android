@@ -60,3 +60,127 @@ jobs:
 
       - name: Test converter wrapper
         run: swift test --package-path converter-swift
+
+  swift-android-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      NDK_VERSION: r30
+      REQUESTED_SWIFT_VERSION: "6.4"
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up JDK 25 for swift-java publishing
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - name: Install swiftly
+        shell: bash
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get -yq install curl jq gpg unzip libcurl4-openssl-dev
+          ARCH="$(uname -m)"
+          curl -L -O --retry 3 "https://download.swift.org/swiftly/linux/swiftly-${ARCH}.tar.gz"
+          tar -xzf "swiftly-${ARCH}.tar.gz"
+          ./swiftly init             --assume-yes             --skip-install             --no-modify-profile             --quiet-shell-followup
+          echo "$HOME/.local/share/swiftly/bin" >> "$GITHUB_PATH"
+
+      - name: Install Android NDK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          curl -L -o ndk.zip --retry 3             "https://dl.google.com/android/repository/android-ndk-${NDK_VERSION}-linux.zip"
+          unzip -q ndk.zip -d "$HOME"
+          echo "ANDROID_NDK_HOME=$HOME/android-ndk-${NDK_VERSION}" >> "$GITHUB_ENV"
+
+      - name: Resolve Swift Android SDK
+        id: swift-sdk
+        shell: bash
+        run: |
+          set -euxo pipefail
+          releases_json="$(curl -fsSL https://www.swift.org/api/v1/install/releases.json)"
+          latest_version="$(echo "$releases_json" | jq -r --arg v "$REQUESTED_SWIFT_VERSION"             '[.[] | select(.name | startswith($v))]
+             | sort_by(.name | split(".") | map(tonumber? // 0))
+             | last
+             | .name')"
+          test -n "$latest_version"
+          test "$latest_version" != "null"
+
+          checksum="$(echo "$releases_json" | jq -r --arg v "$latest_version"             '.[] | select(.name == $v)
+             | .platforms[]
+             | select(.platform == "android-sdk")
+             | .checksum')"
+
+          tag="swift-${latest_version}-RELEASE"
+          url="https://download.swift.org/swift-${latest_version}-release/android-sdk/${tag}/${tag}_android.artifactbundle.tar.gz"
+
+          echo "version=$latest_version" >> "$GITHUB_OUTPUT"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "checksum=$checksum" >> "$GITHUB_OUTPUT"
+          echo "SWIFT_VERSION=$latest_version" >> "$GITHUB_ENV"
+          echo "SWIFT_ANDROID_SDK_VERSION=${tag#swift-}_android" >> "$GITHUB_ENV"
+
+      - name: Install Swift toolchain and Android SDK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          swiftly install "${{ steps.swift-sdk.outputs.version }}"
+          swift sdk install             "${{ steps.swift-sdk.outputs.url }}"             --checksum "${{ steps.swift-sdk.outputs.checksum }}"
+          swift --version
+          swift sdk list
+
+      - name: Configure Swift Android SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          candidates=(
+            "$HOME"/.swiftpm/swift-sdks/*android*.artifactbundle
+            "$HOME"/.config/swiftpm/swift-sdks/*android*.artifactbundle
+            "$HOME"/Library/org.swift.swiftpm/swift-sdks/*android*.artifactbundle
+          )
+          if [[ ${#candidates[@]} -eq 0 ]]; then
+            echo "No Android Swift SDK artifactbundle found" >&2
+            exit 1
+          fi
+          cd "${candidates[0]}"
+          ./swift-android/scripts/setup-android-sdk.sh
+
+      - name: Resolve Swift packages
+        working-directory: converter-swift
+        run: swift package resolve
+
+      - name: Publish SwiftKit Core to Maven local
+        working-directory: converter-swift
+        run: |
+          ./.build/checkouts/swift-java/gradlew             --project-dir .build/checkouts/swift-java             :SwiftKitCore:publishToMavenLocal
+
+      - name: Set up JDK 17 for Android Gradle Plugin
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+
+      - name: Install Android SDK
+        run: sdkmanager "platforms;android-36"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.6.0"
+
+      - name: Build Swift Android AAR
+        run: gradle --stacktrace :converter-swift:assembleDebug
+
+      - name: Upload Swift Android AAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: azookey-converter-swift-debug
+          path: converter-swift/build/outputs/aar/converter-swift-debug.aar
+          if-no-files-found: error

@@ -11,9 +11,11 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        mavenLocal()
     }
 }
 
 rootProject.name = "azooKey-Android"
 include(":core")
 include(":app")
+include(":converter-swift")

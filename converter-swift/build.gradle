@@ -1,0 +1,202 @@
+import java.nio.file.*
+
+plugins {
+    id 'com.android.library'
+}
+
+android {
+    namespace 'dev.turboboo.azookey.converter.swift'
+    compileSdkVersion 36
+
+    defaultConfig {
+        minSdkVersion 28
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation('org.swift.swiftkit:swiftkit-core:+')
+}
+
+def getSwiftlyPath() {
+    def fromConfig = project.findProperty('swiftly.path') ?: System.getenv('SWIFTLY_PATH')
+    if (fromConfig) {
+        return file(fromConfig)
+    }
+
+    def homeDir = System.getProperty('user.home')
+    def possiblePaths = [
+        "${homeDir}/.local/share/swiftly/bin/swiftly",
+        "${homeDir}/.swiftly/bin/swiftly",
+        "${homeDir}/.local/bin/swiftly",
+        '/usr/local/bin/swiftly',
+        '/opt/homebrew/bin/swiftly',
+    ]
+
+    for (path in possiblePaths) {
+        if (file(path).exists()) {
+            return file(path)
+        }
+    }
+
+    throw new GradleException(
+        'Swiftly not found. Install swiftly or set SWIFTLY_PATH.'
+    )
+}
+
+def getSwiftSDKPath() {
+    def fromConfig = project.findProperty('swift.sdk.path') ?: System.getenv('SWIFT_SDK_PATH')
+    if (fromConfig) {
+        return file(fromConfig)
+    }
+
+    def homeDir = System.getProperty('user.home')
+    def possiblePaths = [
+        "${homeDir}/.config/swiftpm/swift-sdks",
+        "${homeDir}/.swiftpm/swift-sdks",
+        "${homeDir}/Library/org.swift.swiftpm/swift-sdks",
+    ]
+
+    for (path in possiblePaths) {
+        if (file(path).exists()) {
+            return file(path)
+        }
+    }
+
+    throw new GradleException(
+        'Swift Android SDK not found. Install it with swift sdk install.'
+    )
+}
+
+def swiftRuntimeLibs = [
+    'swiftCore',
+    'swift_Concurrency',
+    'swift_StringProcessing',
+    'swift_RegexParser',
+    'swift_Builtin_float',
+    'swift_math',
+    'swiftAndroid',
+    'dispatch',
+    'BlocksRuntime',
+    'swiftSwiftOnoneSupport',
+    'swiftDispatch',
+    'Foundation',
+    'FoundationEssentials',
+    'FoundationInternationalization',
+    '_FoundationICU',
+    'swiftSynchronization',
+]
+
+def swiftVersion = System.getenv('SWIFT_VERSION') ?: '6.4.0'
+def androidSdkVersion = System.getenv('SWIFT_ANDROID_SDK_VERSION') ?: "${swiftVersion}-RELEASE_android"
+def sdkName = "swift-${androidSdkVersion}.artifactbundle"
+def minSdk = android.defaultConfig.minSdkVersion.apiLevel
+
+def abis = [
+    'arm64-v8a': [
+        triple: "aarch64-unknown-linux-android${minSdk}",
+        androidSdkLibDirectory: 'swift-aarch64',
+        ndkDirectory: 'aarch64-linux-android',
+    ],
+    'armeabi-v7a': [
+        triple: "armv7-unknown-linux-android${minSdk}",
+        androidSdkLibDirectory: 'swift-armv7',
+        ndkDirectory: 'arm-linux-android',
+    ],
+    'x86_64': [
+        triple: "x86_64-unknown-linux-android${minSdk}",
+        androidSdkLibDirectory: 'swift-x86_64',
+        ndkDirectory: 'x86_64-linux-android',
+    ],
+]
+
+def generatedJniLibsDir = layout.buildDirectory.dir('generated/jniLibs')
+def generatedJavaDir = layout.projectDirectory.dir(
+    '.build/plugins/outputs/converter-swift/AzooKeyAndroidJNI/destination/JExtractSwiftPlugin/src/generated/java'
+)
+def swiftSdkPath = "${getSwiftSDKPath().absolutePath}/${sdkName}"
+
+def buildSwiftAll = tasks.register('buildSwiftAll') {
+    group = 'build'
+    description = 'Builds the Swift JNI bridge for all Android ABIs.'
+
+    inputs.file(new File(projectDir, 'Package.swift'))
+    inputs.dir(new File(projectDir, 'Sources/AzooKeyAndroidJNI'))
+    outputs.dir(generatedJavaDir)
+}
+
+abis.each { abi, info ->
+    def taskName = 'buildSwift' + abi.replaceAll(/[^A-Za-z0-9]/, '_').capitalize()
+
+    def task = tasks.register(taskName, Exec) {
+        group = 'build'
+        description = "Builds the Swift JNI bridge for ${abi}."
+
+        workingDir = layout.projectDirectory
+        executable(getSwiftlyPath())
+        args(
+            'run',
+            'swift',
+            'build',
+            "+${swiftVersion}",
+            '--swift-sdk',
+            info.triple,
+            '--build-system',
+            'native',
+            '--target',
+            'AzooKeyAndroidJNI'
+        )
+
+        outputs.dir(
+            layout.projectDirectory.dir(".build/${info.triple}/debug")
+        )
+    }
+
+    buildSwiftAll.configure {
+        dependsOn(task)
+    }
+}
+
+def copyJniLibs = tasks.register('copyJniLibs', Copy) {
+    dependsOn(buildSwiftAll)
+
+    abis.each { abi, info ->
+        from(layout.projectDirectory.dir(".build/${info.triple}/debug")) {
+            include('*.so')
+            into(abi)
+        }
+
+        from(file(
+            "${swiftSdkPath}/swift-android/ndk-sysroot/usr/lib/${info.ndkDirectory}/libc++_shared.so"
+        )) {
+            into(abi)
+        }
+
+        from(swiftRuntimeLibs.collect { libName ->
+            "${swiftSdkPath}/swift-android/swift-resources/usr/lib/${info.androidSdkLibDirectory}/android/lib${libName}.so"
+        }) {
+            into(abi)
+        }
+    }
+
+    into(generatedJniLibsDir)
+}
+
+android {
+    sourceSets {
+        main {
+            java {
+                srcDir(generatedJavaDir)
+            }
+            jniLibs {
+                srcDir(generatedJniLibsDir)
+            }
+        }
+    }
+}
+
+preBuild.dependsOn(copyJniLibs)
