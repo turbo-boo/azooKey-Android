@@ -42,6 +42,7 @@ class JapaneseFlickKeyboardView(
 ) : LinearLayout(context) {
     interface Callbacks {
         fun onText(text: String)
+        fun onCandidate(text: String)
         fun onDelete()
         fun onChangeCharacterType()
         fun onSpace()
@@ -57,6 +58,10 @@ class JapaneseFlickKeyboardView(
 
     private val keyHeight = dp(54)
     private val gap = dp(2)
+    private val candidateRow = LinearLayout(context).apply {
+        orientation = HORIZONTAL
+        minimumHeight = dp(42)
+    }
     private var keyboardMode = KeyboardMode.HIRAGANA
     private var latinUppercase = false
 
@@ -68,15 +73,40 @@ class JapaneseFlickKeyboardView(
         addView(createGrid())
     }
 
+    fun setCandidates(candidates: List<String>) {
+        candidateRow.removeAllViews()
+
+        candidates
+            .asSequence()
+            .filter(String::isNotBlank)
+            .distinct()
+            .take(10)
+            .forEach { candidate ->
+                candidateRow.addView(
+                    Button(context).apply {
+                        text = candidate
+                        isAllCaps = false
+                        textSize = 16f
+                        gravity = Gravity.CENTER
+                        setPadding(dp(12), 0, dp(12), 0)
+                        setOnClickListener {
+                            callbacks.onCandidate(candidate)
+                        }
+                    },
+                    ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT,
+                        dp(42),
+                    ),
+                )
+            }
+    }
+
     private fun createCandidateArea(): View =
         HorizontalScrollView(context).apply {
             isHorizontalScrollBarEnabled = false
             contentDescription = "Prediction candidates"
             addView(
-                LinearLayout(context).apply {
-                    orientation = HORIZONTAL
-                    minimumHeight = dp(42)
-                },
+                candidateRow,
                 ViewGroup.LayoutParams(
                     ViewGroup.LayoutParams.WRAP_CONTENT,
                     dp(42),

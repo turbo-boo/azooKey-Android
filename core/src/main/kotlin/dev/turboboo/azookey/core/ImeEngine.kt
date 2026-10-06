@@ -64,6 +64,15 @@ class ImeEngine {
         return listOf(EditorCommand.CommitText(committed))
     }
 
+    fun commitCandidate(candidate: String): List<EditorCommand> {
+        if (composingText.isEmpty() || candidate.isEmpty()) {
+            return emptyList()
+        }
+
+        composingText = ""
+        return listOf(EditorCommand.CommitText(candidate))
+    }
+
     fun reset() {
         composingText = ""
     }

@@ -6,6 +6,9 @@ class ImeController(
     private val engine: ImeEngine = ImeEngine(),
     private val executor: EditorCommandExecutor = EditorCommandExecutor(),
 ) {
+    val composingText: String
+        get() = engine.composingText
+
     fun input(text: String, connection: EditorConnection) {
         executor.execute(engine.input(text), connection)
     }
@@ -20,6 +23,10 @@ class ImeController(
 
     fun commit(connection: EditorConnection) {
         executor.execute(engine.commit(), connection)
+    }
+
+    fun selectCandidate(candidate: String, connection: EditorConnection) {
+        executor.execute(engine.commitCandidate(candidate), connection)
     }
 
     fun space(connection: EditorConnection) {
