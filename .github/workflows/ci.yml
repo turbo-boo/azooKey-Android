@@ -11,9 +11,9 @@ permissions:
   contents: read
 
 jobs:
-  unit-tests:
+  verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
 
@@ -34,5 +34,18 @@ jobs:
         with:
           gradle-version: "9.6.0"
 
-      - name: Run unit tests
+      - name: Unit tests
         run: gradle --stacktrace :core:testDebugUnitTest :app:testDebugUnitTest
+
+      - name: Build debug APK
+        run: gradle --stacktrace :app:assembleDebug
+
+      - name: Android lint
+        run: gradle --stacktrace :app:lintDebug
+
+      - name: Upload debug APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: azookey-android-debug
+          path: app/build/outputs/apk/debug/app-debug.apk

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">azooKey</string>
+    <string name="subtype_japanese">日本語</string>
+    <string name="setup_description">azooKey Android の初期実装です。日本語フリック入力、composition、削除、空白、改行、小書き・濁点化に対応しています。予測変換はまだ実装していません。</string>
+    <string name="enable_keyboard">キーボードを有効にする</string>
+    <string name="choose_keyboard">使用するキーボードを選ぶ</string>
+</resources>
