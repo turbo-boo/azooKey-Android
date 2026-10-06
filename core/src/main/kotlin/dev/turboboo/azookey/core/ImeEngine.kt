@@ -10,13 +10,49 @@ class ImeEngine {
     var composingText: String = ""
         private set
 
-    fun input(text: String): List<EditorCommand> = emptyList()
+    fun input(text: String): List<EditorCommand> {
+        if (text.isEmpty()) {
+            return emptyList()
+        }
 
-    fun backspace(): List<EditorCommand> = emptyList()
+        composingText += text
+        return listOf(EditorCommand.SetComposingText(composingText))
+    }
 
-    fun commit(): List<EditorCommand> = emptyList()
+    fun backspace(): List<EditorCommand> {
+        if (composingText.isEmpty()) {
+            return listOf(
+                EditorCommand.DeleteSurroundingText(
+                    beforeCodePoints = 1,
+                    afterCodePoints = 0,
+                ),
+            )
+        }
+
+        composingText = composingText.dropLastCodePoint()
+        return listOf(EditorCommand.SetComposingText(composingText))
+    }
+
+    fun commit(): List<EditorCommand> {
+        if (composingText.isEmpty()) {
+            return emptyList()
+        }
+
+        val committed = composingText
+        composingText = ""
+        return listOf(EditorCommand.CommitText(committed))
+    }
 
     fun reset() {
         composingText = ""
     }
+}
+
+private fun String.dropLastCodePoint(): String {
+    if (isEmpty()) {
+        return this
+    }
+
+    val lastCodePointStart = offsetByCodePoints(length, -1)
+    return substring(0, lastCodePointStart)
 }
