@@ -2,52 +2,92 @@ package dev.turboboo.azookey.ime
 
 import android.inputmethodservice.InputMethodService
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
+import java.util.concurrent.Executor
+import java.util.concurrent.Executors
 
 class AzooKeyInputMethodService : InputMethodService() {
     private val controller = ImeController()
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val candidateWorker = Executors.newSingleThreadExecutor()
+    private lateinit var candidateCoordinator: CandidateCoordinator
+    private var keyboardView: JapaneseFlickKeyboardView? = null
+
+    override fun onCreate() {
+        super.onCreate()
+        candidateCoordinator = CandidateCoordinator(
+            provider = SwiftCandidateProvider(this),
+            workerExecutor = candidateWorker,
+            mainExecutor = Executor { command ->
+                mainHandler.post(command)
+            },
+            onCandidates = { candidates ->
+                keyboardView?.setCandidates(candidates)
+            },
+        )
+    }
 
     override fun onEvaluateFullscreenMode(): Boolean = false
 
     override fun onStartInput(attribute: EditorInfo?, restarting: Boolean) {
         super.onStartInput(attribute, restarting)
         controller.reset()
+        candidateCoordinator.clear()
     }
 
     override fun onFinishInput() {
         controller.reset()
+        candidateCoordinator.clear()
         super.onFinishInput()
     }
 
-    override fun onCreateInputView(): View =
-        JapaneseFlickKeyboardView(
+    override fun onCreateInputView(): View {
+        val view = JapaneseFlickKeyboardView(
             context = this,
             callbacks = object : JapaneseFlickKeyboardView.Callbacks {
                 override fun onText(text: String) {
-                    withEditorConnection { controller.input(text, it) }
+                    withEditorConnection { connection ->
+                        controller.input(text, connection)
+                        refreshCandidates()
+                    }
                 }
 
                 override fun onCandidate(text: String) {
-                    withEditorConnection { controller.selectCandidate(text, it) }
+                    withEditorConnection { connection ->
+                        controller.selectCandidate(text, connection)
+                        candidateCoordinator.clear()
+                    }
                 }
 
                 override fun onDelete() {
-                    withEditorConnection { controller.backspace(it) }
+                    withEditorConnection { connection ->
+                        controller.backspace(connection)
+                        refreshCandidates()
+                    }
                 }
 
                 override fun onChangeCharacterType() {
-                    withEditorConnection { controller.changeCharacterType(it) }
+                    withEditorConnection { connection ->
+                        controller.changeCharacterType(connection)
+                        refreshCandidates()
+                    }
                 }
 
                 override fun onSpace() {
-                    withEditorConnection { controller.space(it) }
+                    withEditorConnection { connection ->
+                        controller.space(connection)
+                        candidateCoordinator.clear()
+                    }
                 }
 
                 override fun onEnter() {
                     withEditorConnection { connection ->
                         controller.commit(connection)
+                        candidateCoordinator.clear()
                         if (!sendDefaultEditorAction(true)) {
                             connection.commitText("\n")
                         }
@@ -67,6 +107,20 @@ class AzooKeyInputMethodService : InputMethodService() {
                 }
             },
         )
+        keyboardView = view
+        candidateCoordinator.request(controller.composingText)
+        return view
+    }
+
+    override fun onDestroy() {
+        candidateWorker.shutdownNow()
+        keyboardView = null
+        super.onDestroy()
+    }
+
+    private fun refreshCandidates() {
+        candidateCoordinator.request(controller.composingText)
+    }
 
     private inline fun withEditorConnection(block: (EditorConnection) -> Unit) {
         val connection = currentInputConnection ?: return

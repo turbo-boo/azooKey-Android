@@ -44,6 +44,10 @@ let package = Package(
                     package: "AzooKeyKanaKanjiConverter"
                 ),
                 .product(
+                    name: "KanaKanjiConverterModuleWithDefaultDictionary",
+                    package: "AzooKeyKanaKanjiConverter"
+                ),
+                .product(
                     name: "SwiftJava",
                     package: "swift-java"
                 ),
