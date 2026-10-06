@@ -4,7 +4,7 @@ plugins {
 
 android {
     namespace = "dev.turboboo.azookey.core"
-    compileSdk = 37
+    compileSdk = 36
 
     defaultConfig {
         minSdk = 26
