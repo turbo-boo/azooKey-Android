@@ -1,6 +1,7 @@
 package dev.turboboo.azookey.ime
 
 import android.inputmethodservice.InputMethodService
+import android.os.Build
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
@@ -50,7 +51,12 @@ class AzooKeyInputMethodService : InputMethodService() {
                 }
 
                 override fun onNextKeyboard() {
-                    if (!switchToNextInputMethod(false)) {
+                    val switched = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                        switchToNextInputMethod(false)
+                    } else {
+                        false
+                    }
+                    if (!switched) {
                         getSystemService(InputMethodManager::class.java)
                             .showInputMethodPicker()
                     }
