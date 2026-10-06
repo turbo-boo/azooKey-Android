@@ -14,25 +14,26 @@ import android.widget.Button
 import android.widget.GridLayout
 import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
+import dev.turboboo.azookey.core.EnglishFlickLayout
 import dev.turboboo.azookey.core.FlickDirection
 import dev.turboboo.azookey.core.FlickDirectionResolver
 import dev.turboboo.azookey.core.FlickKey
 import dev.turboboo.azookey.core.JapaneseFlickLayout
 import dev.turboboo.azookey.core.JapaneseSymbolsFlickLayout
+import dev.turboboo.azookey.core.NumberSymbolsFlickLayout
 import dev.turboboo.azookey.core.PointF2
 
 /*
- * The 4-row x 5-column Japanese flick grid is ported from azooKey's
- * built-in FlickJapaneseCustard.
+ * The 4-row x 5-column flick grids are ported from azooKey's built-in
+ * Japanese, English, and number/symbol Custards.
  *
  * Upstream:
  *   azooKey/azooKey
  *   AzooKeyCore/Sources/KeyboardViews/Custard/FlickJapaneseCustard.swift
- * Original implementation author: Miwa (ensan-hcl)
- * Source commit:
- *   a3b1a3a3b52d91bdae2846461e778797d3ea5016
+ *   AzooKeyCore/Sources/KeyboardViews/Custard/FlickEnglishCustard.swift
+ *   AzooKeyCore/Sources/KeyboardViews/Custard/FlickNumberSymbolsCustard.swift
+ * Original implementation author: Keita Miwa (ensan)
  *
- * Copyright (c) 2020-2023 Keita Miwa (ensan).
  * Licensed under the MIT License. See THIRD_PARTY_NOTICES.md.
  */
 class JapaneseFlickKeyboardView(
@@ -48,8 +49,16 @@ class JapaneseFlickKeyboardView(
         fun onNextKeyboard()
     }
 
+    private enum class KeyboardMode {
+        HIRAGANA,
+        LATIN,
+        NUMBER_SYMBOLS,
+    }
+
     private val keyHeight = dp(54)
     private val gap = dp(2)
+    private var keyboardMode = KeyboardMode.HIRAGANA
+    private var latinUppercase = false
 
     init {
         orientation = VERTICAL
@@ -82,35 +91,123 @@ class JapaneseFlickKeyboardView(
             alignmentMode = GridLayout.ALIGN_BOUNDS
             useDefaultMargins = false
 
-            addSpecialKey("☆123", row = 0, column = 0, enabled = false)
-            addFlickKey(kana("あ"), row = 0, column = 1)
-            addFlickKey(kana("か"), row = 0, column = 2)
-            addFlickKey(kana("さ"), row = 0, column = 3)
-            addRepeatingDeleteKey(row = 0, column = 4)
-
-            addSpecialKey("ABC", row = 1, column = 0, enabled = false)
-            addFlickKey(kana("た"), row = 1, column = 1)
-            addFlickKey(kana("な"), row = 1, column = 2)
-            addFlickKey(kana("は"), row = 1, column = 3)
-            addSpecialKey("空白", row = 1, column = 4, onClick = callbacks::onSpace)
-
-            addSpecialKey("あいう", row = 2, column = 0, enabled = false)
-            addFlickKey(kana("ま"), row = 2, column = 1)
-            addFlickKey(kana("や"), row = 2, column = 2)
-            addFlickKey(kana("ら"), row = 2, column = 3)
-            addSpecialKey(
-                "↵",
-                row = 2,
-                column = 4,
-                rowSpan = 2,
-                onClick = callbacks::onEnter,
-            )
-
-            addSpecialKey("🌐", row = 3, column = 0, onClick = callbacks::onNextKeyboard)
-            addSpecialKey("小ﾞﾟ", row = 3, column = 1, onClick = callbacks::onChangeCharacterType)
-            addFlickKey(kana("わ"), row = 3, column = 2)
-            addFlickKey(JapaneseSymbolsFlickLayout.key, row = 3, column = 3)
+            addModeKeys()
+            when (keyboardMode) {
+                KeyboardMode.HIRAGANA -> addHiraganaKeys()
+                KeyboardMode.LATIN -> addLatinKeys()
+                KeyboardMode.NUMBER_SYMBOLS -> addNumberSymbolKeys()
+            }
+            addEditorKeys()
         }
+
+    private fun GridLayout.addModeKeys() {
+        addSpecialKey(
+            label = "☆123",
+            row = 0,
+            column = 0,
+            onClick = { switchKeyboardMode(KeyboardMode.NUMBER_SYMBOLS) },
+        )
+        addSpecialKey(
+            label = "ABC",
+            row = 1,
+            column = 0,
+            onClick = { switchKeyboardMode(KeyboardMode.LATIN) },
+        )
+        addSpecialKey(
+            label = "あいう",
+            row = 2,
+            column = 0,
+            onClick = { switchKeyboardMode(KeyboardMode.HIRAGANA) },
+        )
+        addSpecialKey("🌐", row = 3, column = 0, onClick = callbacks::onNextKeyboard)
+    }
+
+    private fun GridLayout.addHiraganaKeys() {
+        addFlickKey(kana("あ"), row = 0, column = 1)
+        addFlickKey(kana("か"), row = 0, column = 2)
+        addFlickKey(kana("さ"), row = 0, column = 3)
+
+        addFlickKey(kana("た"), row = 1, column = 1)
+        addFlickKey(kana("な"), row = 1, column = 2)
+        addFlickKey(kana("は"), row = 1, column = 3)
+
+        addFlickKey(kana("ま"), row = 2, column = 1)
+        addFlickKey(kana("や"), row = 2, column = 2)
+        addFlickKey(kana("ら"), row = 2, column = 3)
+
+        addSpecialKey("小ﾞﾟ", row = 3, column = 1, onClick = callbacks::onChangeCharacterType)
+        addFlickKey(kana("わ"), row = 3, column = 2)
+        addFlickKey(JapaneseSymbolsFlickLayout.key, row = 3, column = 3)
+    }
+
+    private fun GridLayout.addLatinKeys() {
+        addFlickKey(english("@#/&_"), row = 0, column = 1)
+        addFlickKey(english("ABC"), row = 0, column = 2)
+        addFlickKey(english("DEF"), row = 0, column = 3)
+
+        addFlickKey(english("GHI"), row = 1, column = 1)
+        addFlickKey(english("JKL"), row = 1, column = 2)
+        addFlickKey(english("MNO"), row = 1, column = 3)
+
+        addFlickKey(english("PQRS"), row = 2, column = 1)
+        addFlickKey(english("TUV"), row = 2, column = 2)
+        addFlickKey(english("WXYZ"), row = 2, column = 3)
+
+        addSpecialKey("a/A", row = 3, column = 1, onClick = ::toggleLatinCase)
+        addFlickKey(english("'\"()"), row = 3, column = 2)
+        addFlickKey(english(".,?!"), row = 3, column = 3)
+    }
+
+    private fun GridLayout.addNumberSymbolKeys() {
+        addFlickKey(numberSymbol("1☆♪→"), row = 0, column = 1)
+        addFlickKey(numberSymbol("2¥$€"), row = 0, column = 2)
+        addFlickKey(numberSymbol("3%°#"), row = 0, column = 3)
+
+        addFlickKey(numberSymbol("4○＊・"), row = 1, column = 1)
+        addFlickKey(numberSymbol("5+×÷"), row = 1, column = 2)
+        addFlickKey(numberSymbol("6<=>"), row = 1, column = 3)
+
+        addFlickKey(numberSymbol("7「」:"), row = 2, column = 1)
+        addFlickKey(numberSymbol("8〒々〆"), row = 2, column = 2)
+        addFlickKey(numberSymbol("9^|\\"), row = 2, column = 3)
+
+        addFlickKey(numberSymbol("()[]"), row = 3, column = 1)
+        addFlickKey(numberSymbol("0〜…"), row = 3, column = 2)
+        addFlickKey(numberSymbol(".,-/"), row = 3, column = 3)
+    }
+
+    private fun GridLayout.addEditorKeys() {
+        addRepeatingDeleteKey(row = 0, column = 4)
+        addSpecialKey("空白", row = 1, column = 4, onClick = callbacks::onSpace)
+        addSpecialKey(
+            "↵",
+            row = 2,
+            column = 4,
+            rowSpan = 2,
+            onClick = callbacks::onEnter,
+        )
+    }
+
+    private fun switchKeyboardMode(mode: KeyboardMode) {
+        if (keyboardMode == mode) {
+            return
+        }
+
+        keyboardMode = mode
+        replaceGrid()
+    }
+
+    private fun toggleLatinCase() {
+        latinUppercase = !latinUppercase
+        replaceGrid()
+    }
+
+    private fun replaceGrid() {
+        if (childCount > 1) {
+            removeViewAt(1)
+        }
+        addView(createGrid(), 1)
+    }
 
     private fun GridLayout.addFlickKey(
         key: FlickKey,
@@ -183,6 +280,16 @@ class JapaneseFlickKeyboardView(
             "Missing built-in kana key: $center"
         }
 
+    private fun english(label: String): FlickKey =
+        requireNotNull(EnglishFlickLayout.key(label, uppercase = latinUppercase)) {
+            "Missing built-in English key: $label"
+        }
+
+    private fun numberSymbol(label: String): FlickKey =
+        requireNotNull(NumberSymbolsFlickLayout.key(label)) {
+            "Missing built-in number/symbol key: $label"
+        }
+
     private fun dp(value: Int): Int =
         (value * resources.displayMetrics.density).toInt()
 }
@@ -199,7 +306,7 @@ private class FlickKeyButton @JvmOverloads constructor(
     private var downPoint: PointF2? = null
 
     init {
-        text = key.center
+        text = key.label
         isAllCaps = false
         textSize = 20f
         gravity = Gravity.CENTER

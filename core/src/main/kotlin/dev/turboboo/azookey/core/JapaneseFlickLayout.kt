@@ -16,6 +16,7 @@ data class FlickKey(
     val top: String? = null,
     val right: String? = null,
     val bottom: String? = null,
+    val label: String = center,
 ) {
     fun output(direction: FlickDirection): String? = when (direction) {
         FlickDirection.CENTER -> center
