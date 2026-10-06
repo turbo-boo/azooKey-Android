@@ -64,6 +64,29 @@ class EditorCommandExecutorTest {
     }
 
     @Test
+    fun utf16FallbackKeepsSupplementaryCodePointIntact() {
+        val connection = FakeEditorConnection(
+            codePointDeleteResult = false,
+            textBeforeCursor = "😀",
+        )
+        val executor = EditorCommandExecutor()
+
+        executor.execute(
+            listOf(EditorCommand.DeleteSurroundingText(1, 0)),
+            connection,
+        )
+
+        assertEquals(
+            listOf(
+                "deleteCodePoints:1:0",
+                "getBefore:2",
+                "deleteUtf16:2:0",
+            ),
+            connection.calls,
+        )
+    }
+
+    @Test
     fun commandsPreserveOrder() {
         val connection = FakeEditorConnection()
         val executor = EditorCommandExecutor()
@@ -89,6 +112,7 @@ class EditorCommandExecutorTest {
 
     private class FakeEditorConnection(
         private val codePointDeleteResult: Boolean = true,
+        private val textBeforeCursor: CharSequence? = null,
     ) : EditorConnection {
         val calls = mutableListOf<String>()
 
@@ -105,6 +129,11 @@ class EditorCommandExecutorTest {
         override fun deleteSurroundingTextInCodePoints(beforeLength: Int, afterLength: Int): Boolean {
             calls += "deleteCodePoints:$beforeLength:$afterLength"
             return codePointDeleteResult
+        }
+
+        override fun getTextBeforeCursor(maxChars: Int): CharSequence? {
+            calls += "getBefore:$maxChars"
+            return textBeforeCursor
         }
 
         override fun deleteSurroundingText(beforeLength: Int, afterLength: Int): Boolean {
