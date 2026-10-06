@@ -193,10 +193,10 @@ android {
     sourceSets {
         main {
             java {
-                srcDir(generatedJavaDir)
+                srcDir(generatedJavaDir.asFile)
             }
             jniLibs {
-                srcDir(generatedJniLibsDir)
+                srcDir(generatedJniLibsDir.get().asFile)
             }
         }
     }
