@@ -90,6 +90,72 @@ public enum AzooKeyAndroidConverter {
         return String(decoding: encoded, as: UTF8.self)
     }
 
+    public static func conversionBridgeJSON(_ input: String) -> String {
+        guard !input.isEmpty else {
+            return #"{"candidates":[],"path":[]}"#
+        }
+
+        var composingText = ComposingText()
+        composingText.insertAtCursorPosition(input, inputStyle: .direct)
+
+        let bridge = storage.withConverter { converter in
+            let result = converter.requestCandidates(
+                composingText,
+                options: ConvertRequestOptions(
+                    N_best: 10,
+                    requireJapanesePrediction: .disabled,
+                    requireEnglishPrediction: .disabled,
+                    keyboardLanguage: .ja_JP,
+                    englishCandidateInRoman2KanaInput: false,
+                    fullWidthRomanCandidate: false,
+                    halfWidthKanaCandidate: false,
+                    learningType: .nothing,
+                    maxMemoryCount: 0,
+                    shouldResetMemory: false,
+                    memoryDirectoryURL: storage.workingDirectory,
+                    sharedContainerURL: storage.workingDirectory,
+                    textReplacer: .empty,
+                    specialCandidateProviders: nil,
+                    metadata: .init(versionString: "azooKey-Android")
+                )
+            )
+
+            let targetRuby = dictionaryReading(input)
+            let pathCandidate = result.mainResults.first {
+                !$0.data.isEmpty && $0.data.map(\.ruby).joined() == targetRuby
+            } ?? result.mainResults.first {
+                !$0.data.isEmpty
+            }
+            let candidates = Array(result.mainResults.prefix(10)).map {
+                ScoredCandidateWire(
+                    text: $0.text,
+                    value: Float($0.value),
+                    exactRuby: !$0.data.isEmpty && $0.data.map(\.ruby).joined() == targetRuby
+                )
+            }
+            let path = pathCandidate?.data.map {
+                PredictionPathElementWire(
+                    word: $0.word,
+                    ruby: $0.ruby,
+                    lcid: $0.lcid,
+                    rcid: $0.rcid,
+                    mid: $0.mid,
+                    value: Float($0.value())
+                )
+            } ?? []
+
+            return ConversionBridgeWire(
+                candidates: candidates,
+                path: path
+            )
+        }
+
+        guard let encoded = try? JSONEncoder().encode(bridge) else {
+            return #"{"candidates":[],"path":[]}"#
+        }
+        return String(decoding: encoded, as: UTF8.self)
+    }
+
     public static func predictionDiagnosticsJSON(_ input: String) -> String {
         guard !input.isEmpty else {
             return #"{"predictions":[],"path":[]}"#
@@ -179,6 +245,17 @@ private final class ConverterStorage: @unchecked Sendable {
     }
 }
 
+
+private struct ScoredCandidateWire: Encodable {
+    let text: String
+    let value: Float
+    let exactRuby: Bool
+}
+
+private struct ConversionBridgeWire: Encodable {
+    let candidates: [ScoredCandidateWire]
+    let path: [PredictionPathElementWire]
+}
 
 private struct PredictionPathElementWire: Encodable {
     let word: String
