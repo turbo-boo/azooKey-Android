@@ -5,6 +5,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.AttributeSet
 import android.view.Gravity
+import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
@@ -70,6 +71,7 @@ class JapaneseFlickKeyboardView(
         setPadding(dp(5), 0, dp(5), 0)
     }
     private val candidateArea: HorizontalScrollView = createCandidateArea()
+    private val flickSuggestionPopup = FlickSuggestionPopup(context)
     private var currentGrid: GridLayout? = null
     private var keyboardMode = KeyboardMode.HIRAGANA
     private var latinUppercase = false
@@ -97,6 +99,7 @@ class JapaneseFlickKeyboardView(
                     gravity = Gravity.CENTER
                     AzooKeyViewStyle.styleCandidate(this)
                     setOnClickListener {
+                        performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                         callbacks.onCandidate(candidate)
                     }
                 }
@@ -372,6 +375,13 @@ class JapaneseFlickKeyboardView(
             context = context,
             key = key,
             onInput = callbacks::onText,
+            onSuggestion = { anchor, suggestion ->
+                flickSuggestionPopup.update(
+                    anchor = anchor,
+                    key = key,
+                    state = suggestion,
+                )
+            },
         ).apply {
             tag = KeyCell(row, column, 1)
             AzooKeyViewStyle.styleKey(
@@ -428,7 +438,10 @@ class JapaneseFlickKeyboardView(
                 special = special,
                 selected = selected,
             )
-            setOnClickListener { onClick?.invoke() }
+            setOnClickListener {
+                performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                onClick?.invoke()
+            }
         }
         addView(
             button,
@@ -466,6 +479,11 @@ class JapaneseFlickKeyboardView(
 
     private fun dp(value: Int): Int =
         (value * resources.displayMetrics.density).toInt()
+
+    override fun onDetachedFromWindow() {
+        flickSuggestionPopup.dismiss()
+        super.onDetachedFromWindow()
+    }
 }
 
 private class FlickKeyButton @JvmOverloads constructor(
@@ -473,9 +491,16 @@ private class FlickKeyButton @JvmOverloads constructor(
     attrs: AttributeSet? = null,
     private val key: FlickKey,
     private val onInput: (String) -> Unit,
+    private val onSuggestion: (View, FlickSuggestionState?) -> Unit,
 ) : Button(context, attrs) {
     private val resolver = FlickDirectionResolver(
-        thresholdPx = 28f * resources.displayMetrics.density,
+        thresholdPx = 25f * resources.displayMetrics.density,
+    )
+    private val suggestionController = FlickSuggestionController(
+        scheduler = HandlerRepeatScheduler(Handler(Looper.getMainLooper())),
+        onSuggestion = { suggestion ->
+            onSuggestion(this, suggestion)
+        },
     )
     private var downPoint: PointF2? = null
 
@@ -490,6 +515,25 @@ private class FlickKeyButton @JvmOverloads constructor(
                 MotionEvent.ACTION_DOWN -> {
                     downPoint = PointF2(event.rawX, event.rawY)
                     isPressed = true
+                    performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                    suggestionController.onDown()
+                    true
+                }
+
+                MotionEvent.ACTION_MOVE -> {
+                    val start = downPoint
+                    if (start != null) {
+                        val direction = resolver.resolve(
+                            start,
+                            PointF2(event.rawX, event.rawY),
+                        )
+                        if (
+                            direction != FlickDirection.CENTER &&
+                            key.output(direction) != null
+                        ) {
+                            suggestionController.onDirection(direction)
+                        }
+                    }
                     true
                 }
 
@@ -497,6 +541,7 @@ private class FlickKeyButton @JvmOverloads constructor(
                     val start = downPoint
                     downPoint = null
                     isPressed = false
+                    suggestionController.onUp()
 
                     if (start != null) {
                         val direction = resolver.resolve(
@@ -515,6 +560,7 @@ private class FlickKeyButton @JvmOverloads constructor(
                 MotionEvent.ACTION_CANCEL -> {
                     downPoint = null
                     isPressed = false
+                    suggestionController.onCancel()
                     true
                 }
 
@@ -527,6 +573,11 @@ private class FlickKeyButton @JvmOverloads constructor(
         super.performClick()
         onInput(key.center)
         return true
+    }
+
+    override fun onDetachedFromWindow() {
+        suggestionController.onCancel()
+        super.onDetachedFromWindow()
     }
 }
 
@@ -564,6 +615,7 @@ private class RepeatingActionButton(
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     isPressed = true
+                    performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                     controller.onDown()
                     true
                 }
