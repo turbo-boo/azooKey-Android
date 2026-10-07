@@ -1196,6 +1196,95 @@ mod tests {
     }
 
     #[test]
+    fn include_mm_matches_upstream_word_type_rules() {
+        let content = DicdataElement {
+            word: "内容".to_owned(),
+            ruby: "ナイヨウ".to_owned(),
+            lcid: 1285,
+            rcid: 1285,
+            mid: 1,
+            value: 0.0,
+        };
+        let function_word = DicdataElement {
+            lcid: 147,
+            rcid: 147,
+            ..content.clone()
+        };
+        let dependent_verb = DicdataElement {
+            lcid: 900,
+            rcid: 900,
+            ..content.clone()
+        };
+
+        assert!(include_mm_value_calculation(&content));
+        assert!(!include_mm_value_calculation(&function_word));
+        assert!(include_mm_value_calculation(&dependent_verb));
+    }
+
+    #[test]
+    fn prediction_ranking_matches_upstream_formula_and_stable_ties() {
+        let root = temporary_dictionary_root("ranking");
+        fs::create_dir_all(root.join("louds")).unwrap();
+        fs::create_dir_all(root.join("cb")).unwrap();
+        fs::write(root.join("louds/charID.chid"), "アイウエ").unwrap();
+
+        let mut cc = Vec::new();
+        cc.extend_from_slice(&(-1i32).to_le_bytes());
+        cc.extend_from_slice(&(-5.0f32).to_le_bytes());
+        cc.extend_from_slice(&(7i32).to_le_bytes());
+        cc.extend_from_slice(&(-1.0f32).to_le_bytes());
+        cc.extend_from_slice(&(8i32).to_le_bytes());
+        cc.extend_from_slice(&(-3.0f32).to_le_bytes());
+        fs::write(root.join("cb/0.binary"), cc).unwrap();
+
+        let dictionary = PredictionDictionary::open(&root).unwrap();
+        let entries = vec![
+            DicdataElement {
+                word: "first".to_owned(),
+                ruby: "アイウ".to_owned(),
+                lcid: 7,
+                rcid: 1,
+                mid: 1,
+                value: -4.0,
+            },
+            DicdataElement {
+                word: "second".to_owned(),
+                ruby: "アイウエ".to_owned(),
+                lcid: 8,
+                rcid: 1,
+                mid: 1,
+                value: -1.0,
+            },
+            DicdataElement {
+                word: "blocked".to_owned(),
+                ruby: "アイウ".to_owned(),
+                lcid: 7,
+                rcid: 33,
+                mid: 1,
+                value: 100.0,
+            },
+        ];
+
+        let ranked = dictionary
+            .rank_prediction_entries(
+                entries,
+                2,
+                PredictionContext::default(),
+                10,
+            )
+            .unwrap();
+
+        assert_eq!(
+            vec!["first".to_owned(), "second".to_owned()],
+            ranked.iter().map(|item| item.word.clone()).collect::<Vec<_>>(),
+        );
+        assert_eq!(-1.0, ranked[0].score);
+        assert_eq!(-1.0, ranked[1].score);
+
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn dictionary_cache_reuses_open_dictionary() {
         let root = temporary_dictionary_root("cache");
         fs::create_dir_all(root.join("louds")).unwrap();
