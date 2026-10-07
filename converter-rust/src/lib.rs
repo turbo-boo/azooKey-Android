@@ -135,6 +135,22 @@ pub struct RankedPrediction {
     pub score: f32,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct PredictionSeed {
+    pub ruby: String,
+    pub prefix_text: String,
+    pub context: PredictionContext,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct ReconstructedClause {
+    start: usize,
+    end: usize,
+    mid: u16,
+    next_lcid: u16,
+    value: f32,
+}
+
 #[derive(Debug)]
 pub struct Louds {
     bits: Vec<u64>,
@@ -468,6 +484,119 @@ impl PredictionDictionary {
             cc_cache: Mutex::new(HashMap::new()),
             mm_cache: Mutex::new(None),
         })
+    }
+
+    pub fn prediction_seed_from_path(
+        &self,
+        data: &[DicdataElement],
+    ) -> Result<Option<PredictionSeed>, DictionaryError> {
+        let clauses = self.reconstruct_clauses(data)?;
+        let Some(last_clause) = clauses.last() else {
+            return Ok(None);
+        };
+
+        let prefix_end = last_clause.start;
+        let prefix_text = data[..prefix_end]
+            .iter()
+            .map(|item| item.word.as_str())
+            .collect::<String>();
+        let ruby = data[last_clause.start..last_clause.end]
+            .iter()
+            .map(|item| item.ruby.as_str())
+            .collect::<String>();
+
+        let prepart = &clauses[..clauses.len() - 1];
+        let last_rcid = if prefix_end == 0 {
+            0
+        } else {
+            data[prefix_end - 1].rcid
+        };
+        let next_lcid = prepart
+            .last()
+            .map(|clause| clause.next_lcid)
+            .unwrap_or(0);
+        let last_mid = prepart.last().map(|clause| clause.mid).unwrap_or(500);
+
+        let mut mm_value = 0.0;
+        let mut previous_mid = 500;
+        for clause in prepart {
+            mm_value += self.mm_value(previous_mid, clause.mid)?;
+            previous_mid = clause.mid;
+        }
+        let last_value = prepart
+            .last()
+            .map(|clause| clause.value + mm_value)
+            .unwrap_or(0.0);
+
+        Ok(Some(PredictionSeed {
+            ruby,
+            prefix_text,
+            context: PredictionContext {
+                last_rcid,
+                next_lcid,
+                last_mid,
+                last_value,
+            },
+        }))
+    }
+
+    fn reconstruct_clauses(
+        &self,
+        data: &[DicdataElement],
+    ) -> Result<Vec<ReconstructedClause>, DictionaryError> {
+        if data.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let mut clauses = Vec::new();
+        let mut previous_rcid = 0u16;
+        let mut total_value = 0.0f32;
+
+        for (index, item) in data.iter().enumerate() {
+            total_value += self.cc_value(previous_rcid, item.lcid)? + item.value;
+
+            let starts_new_clause = !clauses.is_empty() && is_clause(previous_rcid, item.lcid);
+            if starts_new_clause {
+                if let Some(previous_clause) = clauses.last_mut() {
+                    previous_clause.next_lcid = item.lcid;
+                }
+                clauses.push(ReconstructedClause {
+                    start: index,
+                    end: index + 1,
+                    mid: if include_mm_value_calculation(item) {
+                        item.mid
+                    } else {
+                        500
+                    },
+                    next_lcid: 1316,
+                    value: total_value,
+                });
+            } else if let Some(clause) = clauses.last_mut() {
+                clause.end = index + 1;
+                if (clause.mid == 500 && item.mid != 500)
+                    || include_mm_value_calculation(item)
+                {
+                    clause.mid = item.mid;
+                }
+                clause.value = total_value;
+            } else {
+                clauses.push(ReconstructedClause {
+                    start: index,
+                    end: index + 1,
+                    mid: if item.mid != 500 || include_mm_value_calculation(item) {
+                        item.mid
+                    } else {
+                        500
+                    },
+                    next_lcid: 1316,
+                    value: total_value,
+                });
+            }
+
+            previous_rcid = item.rcid;
+        }
+
+        Ok(clauses)
     }
 
     pub fn rank_prediction_entries(
