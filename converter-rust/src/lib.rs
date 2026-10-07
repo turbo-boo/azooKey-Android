@@ -779,13 +779,14 @@ impl PredictionDictionary {
         let mut result = Vec::new();
         for (shard, local_indices) in grouped_indices {
             let file_id = format!("{identifier}{shard}");
-            let bytes = if let Some(cached) = self
-                .loudstxt3_cache
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner())
-                .get(&file_id)
-                .cloned()
-            {
+            let cached = {
+                self.loudstxt3_cache
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                    .get(&file_id)
+                    .cloned()
+            };
+            let bytes = if let Some(cached) = cached {
                 cached
             } else {
                 let path = self
