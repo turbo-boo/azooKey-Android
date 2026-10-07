@@ -842,6 +842,23 @@ fn word_type(cid: u16) -> u8 {
     2
 }
 
+fn is_clause(former: u16, latter: u16) -> bool {
+    let latter_word_type = word_type(latter);
+    if latter_word_type == 3 {
+        return false;
+    }
+
+    let former_word_type = word_type(former);
+    if former_word_type == 3 {
+        return false;
+    }
+
+    match latter_word_type {
+        0 | 1 => former_word_type != 0,
+        _ => false,
+    }
+}
+
 fn include_mm_value_calculation(data: &DicdataElement) -> bool {
     if (895..=1280).contains(&data.lcid) || (895..=1280).contains(&data.rcid) {
         return true;
