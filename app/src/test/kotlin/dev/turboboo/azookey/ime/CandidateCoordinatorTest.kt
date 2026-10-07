@@ -91,6 +91,60 @@ class CandidateCoordinatorTest {
     }
 
     @Test
+    fun completionRunsOnCandidateWorker() {
+        val worker = QueuedExecutor()
+        val completed = mutableListOf<String>()
+        val provider = object : CandidateProvider {
+            override fun candidates(input: String): List<String> = emptyList()
+
+            override fun complete(candidate: String) {
+                completed += candidate
+            }
+        }
+        val coordinator = CandidateCoordinator(
+            provider = provider,
+            workerExecutor = worker,
+            mainExecutor = Executor(Runnable::run),
+            onCandidates = {},
+        )
+
+        coordinator.complete("変換")
+        assertEquals(emptyList<String>(), completed)
+
+        worker.runAll()
+        assertEquals(listOf("変換"), completed)
+    }
+
+    @Test
+    fun completionAndClearPreserveWorkerOrder() {
+        val worker = QueuedExecutor()
+        val events = mutableListOf<String>()
+        val provider = object : CandidateProvider {
+            override fun candidates(input: String): List<String> = emptyList()
+
+            override fun complete(candidate: String) {
+                events += "complete:$candidate"
+            }
+
+            override fun reset() {
+                events += "reset"
+            }
+        }
+        val coordinator = CandidateCoordinator(
+            provider = provider,
+            workerExecutor = worker,
+            mainExecutor = Executor(Runnable::run),
+            onCandidates = {},
+        )
+
+        coordinator.complete("変換")
+        coordinator.clear()
+        worker.runAll()
+
+        assertEquals(listOf("complete:変換", "reset"), events)
+    }
+
+    @Test
     fun providerFailurePublishesEmptyCandidates() {
         val published = mutableListOf<List<String>>()
         val coordinator = CandidateCoordinator(

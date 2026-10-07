@@ -40,3 +40,25 @@ func dynamicUserDictionaryAffectsConversion() throws {
 
     #expect(candidates.contains("ユーザー辞書試験語"))
 }
+
+
+@Test
+func selectedCandidateCanBeLearnedAndUnknownCandidateIsRejected() {
+    AzooKeyAndroidConverter.resetLearningMemory()
+    defer {
+        AzooKeyAndroidConverter.resetLearningMemory()
+    }
+
+    #expect(
+        AzooKeyAndroidConverter.learnCandidate(
+            input: "あさって",
+            candidateText: "明後日"
+        )
+    )
+    #expect(
+        !AzooKeyAndroidConverter.learnCandidate(
+            input: "あさって",
+            candidateText: "存在しない候補"
+        )
+    )
+}
