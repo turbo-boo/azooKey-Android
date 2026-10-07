@@ -19,6 +19,10 @@ let package = Package(
             name: "AzooKeyPredictionOracle",
             targets: ["AzooKeyPredictionOracle"]
         ),
+        .executable(
+            name: "AzooKeyLearningOracle",
+            targets: ["AzooKeyLearningOracle"]
+        ),
     ],
     dependencies: [
         .package(
@@ -65,6 +69,10 @@ let package = Package(
         ),
         .executableTarget(
             name: "AzooKeyPredictionOracle",
+            dependencies: ["AzooKeyAndroidConverter"]
+        ),
+        .executableTarget(
+            name: "AzooKeyLearningOracle",
             dependencies: ["AzooKeyAndroidConverter"]
         ),
         .testTarget(

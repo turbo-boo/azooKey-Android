@@ -88,6 +88,10 @@ public enum AzooKeyAndroidConverter {
         }
     }
 
+    public static var learningMemoryDirectoryPath: String {
+        storage.workingDirectory.path
+    }
+
     public static func resetLearningMemory() {
         storage.withConverter { converter in
             converter.resetMemory()

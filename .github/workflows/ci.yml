@@ -83,6 +83,29 @@ jobs:
             timeout 60s cargo test --manifest-path converter-rust/Cargo.toml \
               tests::pinned_dictionary_matches_upstream_must_word_when_available -- --exact
 
+          learning_output="$(swift run --package-path converter-swift AzooKeyLearningOracle \
+            "ゆーざーじしょしけんご" "学習メモリ専用語" 2>&1)"
+          learned="$(printf '%s\n' "$learning_output" \
+            | sed -n 's/^AZOOKEY_LEARNED=//p' \
+            | tail -n 1)"
+          learning_memory="$(printf '%s\n' "$learning_output" \
+            | sed -n 's/^AZOOKEY_LEARNING_MEMORY_PATH=//p' \
+            | tail -n 1)"
+          test "$learned" = "true"
+          test -f "$learning_memory/memory.louds"
+          test -f "$learning_memory/memory.loudschars2"
+
+          rust_memory="$(dirname "$dictionary_path")/learning-memory"
+          rm -rf "$rust_memory"
+          mkdir -p "$rust_memory"
+          cp "$learning_memory"/memory* "$rust_memory"/
+
+          learned_json="$(cargo run --quiet \
+            --manifest-path converter-rust/Cargo.toml \
+            --bin prediction_oracle -- \
+            "$dictionary_path" "ゆーざー" 10)"
+          python3 -c 'import json,sys; words=json.loads(sys.argv[1]); assert "学習メモリ専用語" in words, f"Rust did not read Swift learning memory: {words!r}"' "$learned_json"
+
           for input in "あ" "あさ"; do
             swift_output="$(swift run --package-path converter-swift AzooKeyPredictionOracle "$input" 2>&1)"
             swift_json="$(printf '%s\n' "$swift_output" \
