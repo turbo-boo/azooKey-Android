@@ -68,6 +68,56 @@ class JapaneseFlickKeyboardViewTest {
     }
 
     @Test
+    fun measuredKeyboardUsesUpstreamPhonePortraitMetrics() {
+        val callbacks = RecordingCallbacks()
+        val view = createView(callbacks)
+        val width = 370
+        val density = view.resources.displayMetrics.density
+        val expected = AzooKeyVisualDesign.phonePortrait(
+            widthPx = width.toFloat(),
+            density = density,
+        )
+
+        view.measure(
+            View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+        )
+
+        assertEquals(expected.keyboardHeightPx.toInt(), view.measuredHeight)
+        assertEquals(
+            expected.keyWidthPx.toInt(),
+            findButton(view, "あ").measuredWidth,
+        )
+    }
+
+    @Test
+    fun candidateBarCanExpandAndCollapse() {
+        val callbacks = RecordingCallbacks()
+        val view = createView(callbacks)
+        view.setCandidates(
+            listOf("候補1", "候補2", "候補3", "候補4", "候補5", "候補6"),
+        )
+
+        val expand = findViewByDescription(view, "候補を展開")
+        expand.performClick()
+
+        assertEquals(
+            "候補を閉じる",
+            findViewByDescription(view, "候補を閉じる").contentDescription,
+        )
+        assertTrue(
+            findViewByDescription(view, "展開候補一覧").visibility == View.VISIBLE,
+        )
+
+        findViewByDescription(view, "候補を閉じる").performClick()
+
+        assertEquals(
+            "候補を展開",
+            findViewByDescription(view, "候補を展開").contentDescription,
+        )
+    }
+
+    @Test
     fun deleteLongPressRepeatsAndStopsOnRelease() {
         val callbacks = RecordingCallbacks()
         val view = createView(callbacks)
@@ -159,6 +209,28 @@ class JapaneseFlickKeyboardViewTest {
     private fun createView(callbacks: RecordingCallbacks): JapaneseFlickKeyboardView {
         val context: Context = RuntimeEnvironment.getApplication()
         return JapaneseFlickKeyboardView(context, callbacks)
+    }
+
+    private fun findViewByDescription(
+        root: View,
+        description: String,
+    ): View {
+        if (root.contentDescription?.toString() == description) {
+            return root
+        }
+
+        if (root is ViewGroup) {
+            for (index in 0 until root.childCount) {
+                runCatching {
+                    return findViewByDescription(
+                        root.getChildAt(index),
+                        description,
+                    )
+                }
+            }
+        }
+
+        error("View not found: $description")
     }
 
     private fun findButton(root: View, label: String): Button {
