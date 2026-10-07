@@ -23,3 +23,20 @@ func defaultDictionaryConvertsUpstreamReadmeExample() throws {
 
     #expect(candidates.contains("azooKeyは新時代のキーボードアプリです"))
 }
+
+
+@Test
+func dynamicUserDictionaryAffectsConversion() throws {
+    let dictionaryJSON = #"[{"reading":"ゆーざーじしょしけんご","word":"ユーザー辞書試験語"}]"#
+    #expect(AzooKeyAndroidConverter.replaceUserDictionaryJSON(dictionaryJSON))
+    defer {
+        _ = AzooKeyAndroidConverter.replaceUserDictionaryJSON("[]")
+    }
+
+    let json = AzooKeyAndroidConverter.candidatesJSON("ゆーざーじしょしけんご")
+    let candidates = try #require(
+        JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String]
+    )
+
+    #expect(candidates.contains("ユーザー辞書試験語"))
+}

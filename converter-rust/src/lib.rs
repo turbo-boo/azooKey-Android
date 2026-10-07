@@ -2002,6 +2002,60 @@ mod tests {
         ))
     }
 
+    #[test]
+    fn dynamic_user_dictionary_prefix_entries_match_upstream_behavior() {
+        let root = temporary_dictionary_root("dynamic-user-dictionary");
+        fs::create_dir_all(root.join("louds")).unwrap();
+        fs::write(root.join("louds/charID.chid"), "カスタムヘン").unwrap();
+
+        replace_user_dictionary_json(
+            &root,
+            r#"[{"reading":"かすたむへんかん","word":"カスタム変換"}]"#,
+        )
+        .unwrap();
+
+        let dictionary = cached_prediction_dictionary(&root).unwrap();
+        let entries = dictionary
+            .raw_prefix_entries("カスタム", false)
+            .unwrap();
+
+        assert!(entries.iter().any(|entry| {
+            entry.word == "カスタム変換"
+                && entry.ruby == "カスタムヘンカン"
+                && entry.lcid == 1288
+                && entry.rcid == 1288
+                && entry.mid == 501
+                && entry.value == -10.0
+        }));
+
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn replacing_dynamic_user_dictionary_removes_old_entries() {
+        let root = temporary_dictionary_root("replace-user-dictionary");
+        fs::create_dir_all(root.join("louds")).unwrap();
+        fs::write(root.join("louds/charID.chid"), "アイウエ").unwrap();
+
+        replace_user_dictionary_json(
+            &root,
+            r#"[{"reading":"あい","word":"旧候補"}]"#,
+        )
+        .unwrap();
+        replace_user_dictionary_json(
+            &root,
+            r#"[{"reading":"あい","word":"新候補"}]"#,
+        )
+        .unwrap();
+
+        let dictionary = cached_prediction_dictionary(&root).unwrap();
+        let entries = dictionary.raw_prefix_entries("アイ", false).unwrap();
+        assert!(!entries.iter().any(|entry| entry.word == "旧候補"));
+        assert!(entries.iter().any(|entry| entry.word == "新候補"));
+
+        fs::remove_dir_all(root).unwrap();
+    }
+
     #[derive(Default, Clone)]
     struct Node {
         children: BTreeMap<u8, Node>,
