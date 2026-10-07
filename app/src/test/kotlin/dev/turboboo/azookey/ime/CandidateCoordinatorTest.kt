@@ -66,6 +66,31 @@ class CandidateCoordinatorTest {
     }
 
     @Test
+    fun emptyInputResetsProviderStateOnWorker() {
+        var resets = 0
+        val worker = QueuedExecutor()
+        val provider = object : CandidateProvider {
+            override fun candidates(input: String): List<String> = listOf(input)
+
+            override fun reset() {
+                resets++
+            }
+        }
+        val coordinator = CandidateCoordinator(
+            provider = provider,
+            workerExecutor = worker,
+            mainExecutor = Executor(Runnable::run),
+            onCandidates = {},
+        )
+
+        coordinator.request("")
+        assertEquals(0, resets)
+
+        worker.runAll()
+        assertEquals(1, resets)
+    }
+
+    @Test
     fun providerFailurePublishesEmptyCandidates() {
         val published = mutableListOf<List<String>>()
         val coordinator = CandidateCoordinator(
