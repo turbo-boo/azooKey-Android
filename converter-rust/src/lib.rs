@@ -16,7 +16,7 @@
 use jni::objects::{JClass, JString};
 use jni::sys::{jfloat, jint};
 use jni::EnvUnowned;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::error::Error;
 use std::fmt::{self, Write};
@@ -130,7 +130,7 @@ impl Default for PredictionContext {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct RankedPrediction {
     pub word: String,
     pub score: f32,
@@ -1229,6 +1229,26 @@ pub fn ranked_prefix_words_json(
     }
 }
 
+pub fn ranked_prediction_path_scored_json(
+    path_json: &str,
+    dictionary_path: impl AsRef<Path>,
+    n_best: usize,
+) -> String {
+    let result = prediction_path_from_json(path_json).and_then(|path| {
+        let dictionary = cached_prediction_dictionary(dictionary_path)?;
+        let Some(seed) = dictionary.prediction_seed_from_path(&path)? else {
+            return Ok(Vec::new());
+        };
+        let entries = dictionary.raw_prefix_entries(&seed.ruby, false)?;
+        dictionary.rank_prediction_entries_for_seed(&seed, entries, n_best)
+    });
+
+    match result {
+        Ok(items) => serde_json::to_string(&items).unwrap_or_else(|_| "[]".to_owned()),
+        Err(_) => "[]".to_owned(),
+    }
+}
+
 pub fn ranked_prediction_path_json(
     path_json: &str,
     dictionary_path: impl AsRef<Path>,
@@ -1326,6 +1346,30 @@ pub extern "system" fn Java_dev_turboboo_azookey_ime_RustPredictionBridge_prefix
         let dictionary_path: String = dictionary_path.to_string();
         let json = match usize::try_from(n_best) {
             Ok(n_best) => ranked_prediction_path_json(
+                &path_json,
+                &dictionary_path,
+                n_best,
+            ),
+            Err(_) => "[]".to_owned(),
+        };
+        JString::from_str(env, json)
+    });
+    outcome.resolve::<jni::errors::ThrowRuntimeExAndDefault>()
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_turboboo_azookey_ime_RustPredictionBridge_prefixScoredFromPathJson<'caller>(
+    mut unowned_env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
+    path_json: JString<'caller>,
+    dictionary_path: JString<'caller>,
+    n_best: jint,
+) -> JString<'caller> {
+    let outcome = unowned_env.with_env(|env| -> Result<_, jni::errors::Error> {
+        let path_json: String = path_json.to_string();
+        let dictionary_path: String = dictionary_path.to_string();
+        let json = match usize::try_from(n_best) {
+            Ok(n_best) => ranked_prediction_path_scored_json(
                 &path_json,
                 &dictionary_path,
                 n_best,
