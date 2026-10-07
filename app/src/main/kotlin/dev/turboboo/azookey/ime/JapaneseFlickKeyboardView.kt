@@ -14,6 +14,7 @@ import android.widget.Button
 import android.widget.GridLayout
 import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import dev.turboboo.azookey.core.EnglishFlickLayout
 import dev.turboboo.azookey.core.FlickDirection
 import dev.turboboo.azookey.core.FlickDirectionResolver
@@ -71,8 +72,58 @@ class JapaneseFlickKeyboardView(
         setPadding(dp(5), 0, dp(5), 0)
     }
     private val candidateArea: HorizontalScrollView = createCandidateArea()
+    private val expandCandidatesButton = Button(context).apply {
+        text = "⌄"
+        contentDescription = "候補を展開"
+        gravity = Gravity.CENTER
+        visibility = GONE
+        AzooKeyViewStyle.styleCandidate(this)
+        setOnClickListener {
+            performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+            setCandidatesExpanded(!candidatesExpanded)
+        }
+    }
+    private val candidateBar = LinearLayout(context).apply {
+        orientation = HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        setBackgroundColor(AzooKeyViewStyle.palette(context).resultBackground)
+        addView(
+            candidateArea,
+            LayoutParams(
+                0,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                1f,
+            ),
+        )
+        addView(
+            expandCandidatesButton,
+            LayoutParams(
+                dp(36),
+                candidateButtonHeight(),
+            ).apply {
+                marginEnd = dp(10)
+            },
+        )
+    }
+    private val expandedCandidateFlow = CandidateFlowLayout(context).apply {
+        contentDescription = "展開候補一覧"
+    }
+    private val expandedCandidateArea = ScrollView(context).apply {
+        visibility = GONE
+        isVerticalScrollBarEnabled = false
+        setBackgroundColor(AzooKeyViewStyle.palette(context).resultBackground)
+        addView(
+            expandedCandidateFlow,
+            ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ),
+        )
+    }
     private val flickSuggestionPopup = FlickSuggestionPopup(context)
     private var currentGrid: GridLayout? = null
+    private var currentCandidates: List<String> = emptyList()
+    private var candidatesExpanded = false
     private var keyboardMode = KeyboardMode.HIRAGANA
     private var latinUppercase = false
 
@@ -81,38 +132,87 @@ class JapaneseFlickKeyboardView(
         setPadding(0, 0, 0, 0)
         setBackgroundColor(AzooKeyViewStyle.palette(context).background)
 
-        addView(candidateArea)
+        addView(candidateBar)
         addView(createGrid().also { currentGrid = it })
+        addView(expandedCandidateArea)
     }
 
     fun setCandidates(candidates: List<String>) {
-        candidateRow.removeAllViews()
-
-        candidates
+        currentCandidates = candidates
             .asSequence()
             .filter(String::isNotBlank)
             .distinct()
             .take(10)
-            .forEach { candidate ->
-                val button = Button(context).apply {
-                    text = candidate
-                    gravity = Gravity.CENTER
-                    AzooKeyViewStyle.styleCandidate(this)
-                    setOnClickListener {
-                        performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-                        callbacks.onCandidate(candidate)
-                    }
+            .toList()
+
+        candidateRow.removeAllViews()
+        expandedCandidateFlow.removeAllViews()
+
+        currentCandidates.forEach { candidate ->
+            candidateRow.addView(
+                createCandidateButton(
+                    candidate = candidate,
+                    collapseAfterSelection = false,
+                ),
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    candidateButtonHeight(),
+                ).apply {
+                    marginEnd = dp(AzooKeyVisualDesign.CANDIDATE_SPACING_DP.toInt())
+                },
+            )
+
+            expandedCandidateFlow.addView(
+                createCandidateButton(
+                    candidate = candidate,
+                    collapseAfterSelection = true,
+                ),
+                ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                ),
+            )
+        }
+
+        expandCandidatesButton.visibility =
+            if (currentCandidates.isEmpty()) GONE else VISIBLE
+        if (currentCandidates.isEmpty()) {
+            setCandidatesExpanded(false)
+        }
+    }
+
+    private fun createCandidateButton(
+        candidate: String,
+        collapseAfterSelection: Boolean,
+    ): Button =
+        Button(context).apply {
+            text = candidate
+            gravity = Gravity.CENTER
+            AzooKeyViewStyle.styleCandidate(this)
+            setOnClickListener {
+                performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                if (collapseAfterSelection) {
+                    setCandidatesExpanded(false)
                 }
-                candidateRow.addView(
-                    button,
-                    LinearLayout.LayoutParams(
-                        ViewGroup.LayoutParams.WRAP_CONTENT,
-                        candidateButtonHeight(),
-                    ).apply {
-                        marginEnd = dp(AzooKeyVisualDesign.CANDIDATE_SPACING_DP.toInt())
-                    },
-                )
+                callbacks.onCandidate(candidate)
             }
+        }
+
+    private fun setCandidatesExpanded(expanded: Boolean) {
+        candidatesExpanded = expanded && currentCandidates.isNotEmpty()
+        if (candidatesExpanded) {
+            candidateArea.visibility = INVISIBLE
+            currentGrid?.visibility = GONE
+            expandedCandidateArea.visibility = VISIBLE
+            expandCandidatesButton.text = "⌃"
+            expandCandidatesButton.contentDescription = "候補を閉じる"
+        } else {
+            candidateArea.visibility = VISIBLE
+            currentGrid?.visibility = VISIBLE
+            expandedCandidateArea.visibility = GONE
+            expandCandidatesButton.text = "⌄"
+            expandCandidatesButton.contentDescription = "候補を展開"
+        }
     }
 
     override fun onMeasure(
@@ -171,11 +271,17 @@ class JapaneseFlickKeyboardView(
             (metrics.keyboardBarHeightPx +
                 AzooKeyVisualDesign.KEYBOARD_VERTICAL_PADDING_DP * density)
                 .roundToInt()
-        candidateArea.layoutParams = LayoutParams(
+        candidateBar.layoutParams = LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             barSectionHeight,
         )
-        candidateArea.setPadding(0, dp(6), 0, dp(6))
+        candidateBar.setPadding(0, dp(6), 0, dp(6))
+
+        val expandParams =
+            expandCandidatesButton.layoutParams as LinearLayout.LayoutParams
+        expandParams.width = (metrics.keyboardBarHeightPx * 0.5f).roundToInt()
+        expandParams.height = metrics.candidateButtonHeightPx.roundToInt()
+        expandCandidatesButton.layoutParams = expandParams
 
         for (index in 0 until candidateRow.childCount) {
             val child = candidateRow.getChildAt(index)
@@ -187,6 +293,10 @@ class JapaneseFlickKeyboardView(
         val grid = currentGrid ?: return
         val gridHeight =
             (metrics.keyboardHeightPx - barSectionHeight).roundToInt()
+        expandedCandidateArea.layoutParams = LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            gridHeight,
+        )
         grid.layoutParams = LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             gridHeight,
@@ -364,6 +474,7 @@ class JapaneseFlickKeyboardView(
         currentGrid = grid
         addView(grid, 1)
         currentMetrics?.let(::applyMetrics)
+        setCandidatesExpanded(candidatesExpanded)
     }
 
     private fun GridLayout.addFlickKey(
