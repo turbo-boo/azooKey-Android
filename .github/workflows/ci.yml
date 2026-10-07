@@ -68,6 +68,11 @@ jobs:
       - name: Test converter wrapper
         run: swift test --package-path converter-swift
 
+      - name: Test Rust prediction core against pinned dictionary
+        env:
+          AZOOKEY_DICTIONARY_PATH: converter-swift/.build/checkouts/AzooKeyKanaKanjiConverter/Sources/KanaKanjiConverterModuleWithDefaultDictionary/azooKey_dictionary_storage/Dictionary
+        run: cargo test --manifest-path converter-rust/Cargo.toml tests::pinned_dictionary_matches_upstream_must_word_when_available -- --exact
+
   android-integration:
     runs-on: ubuntu-latest
     timeout-minutes: 50
@@ -200,11 +205,6 @@ jobs:
             :app:testDebugUnitTest \
             :app:lintDebug \
             :app:assembleDebug
-
-      - name: Test Rust prediction core against packaged pinned dictionary
-        env:
-          AZOOKEY_DICTIONARY_PATH: converter-swift/build/generated/assets/azookey_dictionary
-        run: cargo test --manifest-path converter-rust/Cargo.toml tests::pinned_dictionary_matches_upstream_must_word_when_available -- --exact
 
       - name: Verify packaged converter and APK
         shell: bash
