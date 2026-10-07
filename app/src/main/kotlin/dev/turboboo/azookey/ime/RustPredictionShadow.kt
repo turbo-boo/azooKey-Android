@@ -7,18 +7,33 @@ internal fun interface PredictionShadow {
         input: String,
         dictionaryPath: String,
         swiftPredictions: List<String>,
+        predictionPathJson: String,
     )
 }
 
 internal fun interface RustPredictionNative {
-    fun prefixWordsJson(input: String, dictionaryPath: String): String
+    fun prefixWordsJson(
+        input: String,
+        dictionaryPath: String,
+        predictionPathJson: String,
+    ): String
 }
 
 internal object AndroidRustPredictionNative : RustPredictionNative {
     override fun prefixWordsJson(
         input: String,
         dictionaryPath: String,
-    ): String = RustPredictionBridge.prefixWordsJson(input, dictionaryPath)
+        predictionPathJson: String,
+    ): String =
+        if (predictionPathJson != "[]") {
+            RustPredictionBridge.prefixWordsFromPathJson(
+                predictionPathJson,
+                dictionaryPath,
+                SHADOW_N_BEST,
+            )
+        } else {
+            RustPredictionBridge.prefixWordsJson(input, dictionaryPath)
+        }
 }
 
 internal data class PredictionParityMismatch(
@@ -36,20 +51,26 @@ internal class RustPredictionShadow(
         input: String,
         dictionaryPath: String,
         swiftPredictions: List<String>,
+        predictionPathJson: String,
     ) {
         if (input.isEmpty()) {
             return
         }
 
+        val expected = swiftPredictions.take(SHADOW_N_BEST)
         runCatching {
             parseCandidateJson(
-                native.prefixWordsJson(input, dictionaryPath),
-            ).take(swiftPredictions.size)
+                native.prefixWordsJson(
+                    input,
+                    dictionaryPath,
+                    predictionPathJson,
+                ),
+            ).take(SHADOW_N_BEST)
         }.onSuccess { rustPredictions ->
-            if (rustPredictions != swiftPredictions) {
+            if (rustPredictions != expected) {
                 onMismatch(
                     PredictionParityMismatch(
-                        swiftPredictions = swiftPredictions,
+                        swiftPredictions = expected,
                         rustPredictions = rustPredictions,
                     ),
                 )
@@ -61,3 +82,5 @@ internal class RustPredictionShadow(
         const val TAG = "AzooKeyRustPrediction"
     }
 }
+
+private const val SHADOW_N_BEST = 3

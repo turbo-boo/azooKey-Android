@@ -5,11 +5,11 @@ import org.junit.Test
 
 class RustPredictionShadowTest {
     @Test
-    fun observeForwardsInputAndDictionaryPath() {
-        val calls = mutableListOf<Pair<String, String>>()
+    fun observeForwardsInputDictionaryAndPath() {
+        val calls = mutableListOf<Triple<String, String, String>>()
         val shadow = RustPredictionShadow(
-            native = RustPredictionNative { input, dictionaryPath ->
-                calls += input to dictionaryPath
+            native = RustPredictionNative { input, dictionaryPath, predictionPathJson ->
+                calls += Triple(input, dictionaryPath, predictionPathJson)
                 """["明後日"]"""
             },
         )
@@ -18,10 +18,17 @@ class RustPredictionShadowTest {
             input = "あさって",
             dictionaryPath = "/tmp/dictionary",
             swiftPredictions = listOf("明後日"),
+            predictionPathJson = """[{"word":"明日"}]""",
         )
 
         assertEquals(
-            listOf("あさって" to "/tmp/dictionary"),
+            listOf(
+                Triple(
+                    "あさって",
+                    "/tmp/dictionary",
+                    """[{"word":"明日"}]""",
+                ),
+            ),
             calls,
         )
     }
@@ -30,7 +37,7 @@ class RustPredictionShadowTest {
     fun matchingPredictionsDoNotReportMismatch() {
         val mismatches = mutableListOf<PredictionParityMismatch>()
         val shadow = RustPredictionShadow(
-            native = RustPredictionNative { _, _ -> """["明後日","あさって"]""" },
+            native = RustPredictionNative { _, _, _ -> """["明後日","あさって"]""" },
             onMismatch = mismatches::add,
         )
 
@@ -38,16 +45,43 @@ class RustPredictionShadowTest {
             input = "あさって",
             dictionaryPath = "/tmp/dictionary",
             swiftPredictions = listOf("明後日", "あさって"),
+            predictionPathJson = "[]",
         )
 
         assertEquals(emptyList<PredictionParityMismatch>(), mismatches)
     }
 
     @Test
+    fun rustCandidatesAreComparedEvenWhenSwiftListIsEmpty() {
+        val mismatches = mutableListOf<PredictionParityMismatch>()
+        val shadow = RustPredictionShadow(
+            native = RustPredictionNative { _, _, _ -> """["明後日"]""" },
+            onMismatch = mismatches::add,
+        )
+
+        shadow.observe(
+            input = "あさって",
+            dictionaryPath = "/tmp/dictionary",
+            swiftPredictions = emptyList(),
+            predictionPathJson = "[]",
+        )
+
+        assertEquals(
+            listOf(
+                PredictionParityMismatch(
+                    swiftPredictions = emptyList(),
+                    rustPredictions = listOf("明後日"),
+                ),
+            ),
+            mismatches,
+        )
+    }
+
+    @Test
     fun differingPredictionsReportBothSides() {
         val mismatches = mutableListOf<PredictionParityMismatch>()
         val shadow = RustPredictionShadow(
-            native = RustPredictionNative { _, _ -> """["明後日","明々後日"]""" },
+            native = RustPredictionNative { _, _, _ -> """["明後日","明々後日"]""" },
             onMismatch = mismatches::add,
         )
 
@@ -55,6 +89,7 @@ class RustPredictionShadowTest {
             input = "あさって",
             dictionaryPath = "/tmp/dictionary",
             swiftPredictions = listOf("明後日", "あさって"),
+            predictionPathJson = "[]",
         )
 
         assertEquals(
@@ -72,7 +107,7 @@ class RustPredictionShadowTest {
     fun observeSkipsEmptyInput() {
         var callCount = 0
         val shadow = RustPredictionShadow(
-            native = RustPredictionNative { _, _ ->
+            native = RustPredictionNative { _, _, _ ->
                 callCount += 1
                 "[]"
             },
@@ -82,6 +117,7 @@ class RustPredictionShadowTest {
             input = "",
             dictionaryPath = "/tmp/dictionary",
             swiftPredictions = emptyList(),
+            predictionPathJson = "[]",
         )
 
         assertEquals(0, callCount)
@@ -90,7 +126,7 @@ class RustPredictionShadowTest {
     @Test
     fun nativeFailureDoesNotEscapeShadowBoundary() {
         val shadow = RustPredictionShadow(
-            native = RustPredictionNative { _, _ ->
+            native = RustPredictionNative { _, _, _ ->
                 error("native failure")
             },
         )
@@ -99,6 +135,7 @@ class RustPredictionShadowTest {
             input = "あさって",
             dictionaryPath = "/tmp/dictionary",
             swiftPredictions = listOf("明後日"),
+            predictionPathJson = "[]",
         )
     }
 }

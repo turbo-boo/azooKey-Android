@@ -30,17 +30,18 @@ internal class SwiftCandidateProvider(
                 dictionaryPath,
             ),
         )
-        if let predictionShadow {
-            val swiftPredictions = parseCandidateJson(
-                AzooKeyAndroidJNI.predictionCandidatesJSON(
+        predictionShadow?.let { shadow ->
+            val diagnostics = parsePredictionShadowJson(
+                AzooKeyAndroidJNI.predictionShadowJSON(
                     input,
                     dictionaryPath,
                 ),
             )
-            predictionShadow.observe(
+            shadow.observe(
                 input = input,
                 dictionaryPath = dictionaryPath,
-                swiftPredictions = swiftPredictions,
+                swiftPredictions = diagnostics.predictions,
+                predictionPathJson = diagnostics.pathJson,
             )
         }
         return candidates
@@ -125,3 +126,25 @@ internal fun parseCandidateJson(json: String): List<String> =
             }
         }
     }.getOrDefault(emptyList())
+
+
+internal data class PredictionShadowDiagnostics(
+    val predictions: List<String>,
+    val pathJson: String,
+)
+
+internal fun parsePredictionShadowJson(json: String): PredictionShadowDiagnostics =
+    runCatching {
+        val root = org.json.JSONObject(json)
+        PredictionShadowDiagnostics(
+            predictions = parseCandidateJson(
+                root.optJSONArray("predictions")?.toString() ?: "[]",
+            ),
+            pathJson = root.optJSONArray("path")?.toString() ?: "[]",
+        )
+    }.getOrDefault(
+        PredictionShadowDiagnostics(
+            predictions = emptyList(),
+            pathJson = "[]",
+        ),
+    )
