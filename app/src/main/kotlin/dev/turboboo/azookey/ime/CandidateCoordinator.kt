@@ -5,6 +5,8 @@ import java.util.concurrent.atomic.AtomicLong
 
 fun interface CandidateProvider {
     fun candidates(input: String): List<String>
+
+    fun reset() {}
 }
 
 class CandidateCoordinator(
@@ -19,6 +21,9 @@ class CandidateCoordinator(
         val requestGeneration = generation.incrementAndGet()
 
         if (input.isEmpty()) {
+            workerExecutor.execute {
+                runCatching(provider::reset)
+            }
             publishIfCurrent(requestGeneration, emptyList())
             return
         }

@@ -39,12 +39,14 @@ internal class SwiftCandidateProvider(
     private val predictionShadow: PredictionShadow? = null,
 ) : CandidateProvider {
     private val appContext = context.applicationContext
+    private val stablePredictionCache = StablePredictionCache()
     private val dictionaryDirectory: File by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         installDictionary()
     }
 
     override fun candidates(input: String): List<String> {
         if (input.isEmpty()) {
+            stablePredictionCache.clear()
             return emptyList()
         }
 
@@ -56,7 +58,7 @@ internal class SwiftCandidateProvider(
             ),
         )
 
-        val rustPredictions = runCatching {
+        val freshPredictions = runCatching {
             predictionEngine.predictions(
                 pathJson = bridge.pathJson,
                 dictionaryPath = dictionaryPath,
@@ -64,11 +66,25 @@ internal class SwiftCandidateProvider(
         }.getOrDefault(emptyList())
 
         val candidates = if (bridge.candidates.isNotEmpty()) {
+            val reading = dictionaryReading(input)
+            val stablePredictions = stablePredictionCache.compatible(reading)
+            val rustPredictions = mergeStablePredictions(
+                stablePredictions = stablePredictions,
+                freshPredictions = freshPredictions,
+                limit = 3,
+            )
+            stablePredictionCache.update(
+                reading = reading,
+                candidates = rustPredictions,
+            )
+
             mergeHybridCandidates(
                 swiftCandidates = bridge.candidates,
                 rustPredictions = rustPredictions,
+                stablePredictions = stablePredictions,
             )
         } else {
+            stablePredictionCache.clear()
             // Fail safe for a bridge-format or native-loading regression.
             parseCandidateJson(
                 AzooKeyAndroidJNI.candidatesJSON(
@@ -93,6 +109,10 @@ internal class SwiftCandidateProvider(
             )
         }
         return candidates
+    }
+
+    override fun reset() {
+        stablePredictionCache.clear()
     }
 
     private fun installDictionary(): File = synchronized(dictionaryInstallLock) {
@@ -324,6 +344,7 @@ internal fun parseScoredPredictionJson(json: String): List<ScoredCandidate> =
                     ScoredCandidate(
                         text = text,
                         value = item.optDouble("score", Double.NEGATIVE_INFINITY).toFloat(),
+                        ruby = item.optString("ruby", ""),
                     ),
                 )
             }
