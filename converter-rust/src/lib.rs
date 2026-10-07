@@ -16,6 +16,7 @@
 use jni::objects::{JClass, JString};
 use jni::sys::{jfloat, jint};
 use jni::EnvUnowned;
+use serde::Deserialize;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::error::Error;
 use std::fmt::{self, Write};
@@ -133,6 +134,35 @@ impl Default for PredictionContext {
 pub struct RankedPrediction {
     pub word: String,
     pub score: f32,
+}
+
+#[derive(Debug, Deserialize)]
+struct PredictionPathElementWire {
+    word: String,
+    ruby: String,
+    lcid: u16,
+    rcid: u16,
+    mid: u16,
+    value: f32,
+}
+
+fn prediction_path_from_json(
+    json: &str,
+) -> Result<Vec<DicdataElement>, DictionaryError> {
+    let elements: Vec<PredictionPathElementWire> = serde_json::from_str(json)
+        .map_err(|_| DictionaryError::InvalidFormat("prediction path JSON is invalid"))?;
+
+    Ok(elements
+        .into_iter()
+        .map(|element| DicdataElement {
+            word: element.word,
+            ruby: element.ruby,
+            lcid: element.lcid,
+            rcid: element.rcid,
+            mid: element.mid,
+            value: element.value,
+        })
+        .collect())
 }
 
 #[derive(Debug, Clone, PartialEq)]
