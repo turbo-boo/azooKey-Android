@@ -80,7 +80,7 @@ jobs:
           dictionary_path="$(realpath "$dictionary_path")"
           test -f "$dictionary_path/louds/charID.chid"
           AZOOKEY_DICTIONARY_PATH="$dictionary_path" \
-            cargo test --manifest-path converter-rust/Cargo.toml \
+            timeout 60s cargo test --manifest-path converter-rust/Cargo.toml \
               tests::pinned_dictionary_matches_upstream_must_word_when_available -- --exact
 
           for input in "あ" "あさ"; do
@@ -262,6 +262,8 @@ jobs:
           test -f "$rust_so"
           nm -D "$rust_so" \
             | grep -q 'Java_dev_turboboo_azookey_ime_RustPredictionBridge_prefixWordsJson'
+          nm -D "$rust_so" \
+            | grep -q 'Java_dev_turboboo_azookey_ime_RustPredictionBridge_prefixWordsWithContextJson'
 
           unzip -l "$aar" | grep -q 'assets/azookey_dictionary/'
           unzip -l "$apk" | grep -q 'assets/azookey_dictionary/'

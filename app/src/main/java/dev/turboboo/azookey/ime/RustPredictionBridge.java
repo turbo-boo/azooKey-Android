@@ -8,4 +8,14 @@ final class RustPredictionBridge {
     private RustPredictionBridge() {}
 
     static native String prefixWordsJson(String input, String dictionaryPath);
+
+    static native String prefixWordsWithContextJson(
+        String input,
+        String dictionaryPath,
+        int lastRcid,
+        int nextLcid,
+        int lastMid,
+        float lastValue,
+        int nBest
+    );
 }
