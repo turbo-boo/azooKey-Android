@@ -15,6 +15,10 @@ let package = Package(
             type: .dynamic,
             targets: ["AzooKeyAndroidJNI"]
         ),
+        .executable(
+            name: "AzooKeyPredictionOracle",
+            targets: ["AzooKeyPredictionOracle"]
+        ),
     ],
     dependencies: [
         .package(
@@ -58,6 +62,10 @@ let package = Package(
                     package: "swift-java"
                 )
             ]
+        ),
+        .executableTarget(
+            name: "AzooKeyPredictionOracle",
+            dependencies: ["AzooKeyAndroidConverter"]
         ),
         .testTarget(
             name: "AzooKeyAndroidConverterTests",

@@ -979,11 +979,19 @@ fn words_json(words: &[String]) -> String {
     output
 }
 
-fn raw_prefix_words_json(input: &str, dictionary_path: &str) -> String {
-    match ranked_prefix_words(input, dictionary_path, 10) {
+pub fn ranked_prefix_words_json(
+    input: &str,
+    dictionary_path: impl AsRef<Path>,
+    n_best: usize,
+) -> String {
+    match ranked_prefix_words(input, dictionary_path, n_best) {
         Ok(words) => words_json(&words),
         Err(_) => "[]".to_owned(),
     }
+}
+
+fn raw_prefix_words_json(input: &str, dictionary_path: &str) -> String {
+    ranked_prefix_words_json(input, dictionary_path, 10)
 }
 
 #[unsafe(no_mangle)]
