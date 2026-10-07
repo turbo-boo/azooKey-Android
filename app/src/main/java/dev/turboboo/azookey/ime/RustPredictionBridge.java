@@ -15,6 +15,12 @@ final class RustPredictionBridge {
         int nBest
     );
 
+    static native String prefixScoredFromPathJson(
+        String pathJson,
+        String dictionaryPath,
+        int nBest
+    );
+
     static native String prefixWordsWithContextJson(
         String input,
         String dictionaryPath,
