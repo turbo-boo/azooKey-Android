@@ -49,6 +49,20 @@ class MainActivity : Activity() {
 
         root.addView(
             Button(this).apply {
+                text = getString(R.string.user_dictionary)
+                isAllCaps = false
+                setOnClickListener {
+                    startActivity(Intent(this@MainActivity, UserDictionaryActivity::class.java))
+                }
+            },
+            ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ),
+        )
+
+        root.addView(
+            Button(this).apply {
                 text = getString(R.string.choose_keyboard)
                 isAllCaps = false
                 setOnClickListener {

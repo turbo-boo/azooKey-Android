@@ -2,7 +2,15 @@
 <resources>
     <string name="app_name">azooKey</string>
     <string name="subtype_japanese">日本語</string>
-    <string name="setup_description">azooKey Android の初期実装です。日本語フリック入力、composition、削除、空白、改行、小書き・濁点化に対応しています。予測変換はまだ実装していません。</string>
+    <string name="setup_description">azooKey Android の初期実装です。日本語フリック入力、かな漢字変換、Rust 予測変換、ユーザー辞書に対応しています。</string>
     <string name="enable_keyboard">キーボードを有効にする</string>
     <string name="choose_keyboard">使用するキーボードを選ぶ</string>
+    <string name="user_dictionary">ユーザー辞書</string>
+    <string name="user_dictionary_description">読みと単語を登録すると、かな漢字変換と予測変換の両方に反映されます。</string>
+    <string name="user_dictionary_reading_hint">読み（例: おーぷんえーあい）</string>
+    <string name="user_dictionary_word_hint">単語（例: OpenAI）</string>
+    <string name="user_dictionary_add">登録</string>
+    <string name="user_dictionary_delete">削除</string>
+    <string name="user_dictionary_empty">登録済みの単語はありません。</string>
+    <string name="user_dictionary_invalid">読みと単語を入力してください。重複する登録は追加されません。</string>
 </resources>

@@ -310,9 +310,14 @@ jobs:
           unzip -p "$aar" classes.jar > "$RUNNER_TEMP/converter-classes.jar"
           jar tf "$RUNNER_TEMP/converter-classes.jar" \
             | grep -qx 'dev/turboboo/azookey/converter/AzooKeyAndroidJNI.class'
+          javap -classpath "$RUNNER_TEMP/converter-classes.jar" \
+            dev.turboboo.azookey.converter.AzooKeyAndroidJNI \
+            | grep -q 'replaceUserDictionaryJSON'
 
           rust_so="app/build/generated/rustJniLibs/x86_64/libazookey_prediction_rust.so"
           test -f "$rust_so"
+          nm -D "$rust_so" \
+            | grep -q 'Java_dev_turboboo_azookey_ime_RustPredictionBridge_replaceUserDictionaryJson'
           nm -D "$rust_so" \
             | grep -q 'Java_dev_turboboo_azookey_ime_RustPredictionBridge_prefixWordsJson'
           nm -D "$rust_so" \
