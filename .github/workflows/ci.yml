@@ -84,7 +84,8 @@ jobs:
               tests::pinned_dictionary_matches_upstream_must_word_when_available -- --exact
 
           for input in "あ" "あさ"; do
-            swift_json="$(swift run --package-path converter-swift AzooKeyPredictionOracle "$input" 2>&1 \
+            swift_output="$(swift run --package-path converter-swift AzooKeyPredictionOracle "$input" 2>&1)"
+            swift_json="$(printf '%s\n' "$swift_output" \
               | sed -n 's/^AZOOKEY_PREDICTION_JSON=//p' \
               | tail -n 1)"
             test -n "$swift_json"
@@ -95,6 +96,22 @@ jobs:
               "$dictionary_path" "$input" 5)"
 
             python3 -c 'import json,sys; i,s,r=sys.argv[1:4]; a=json.loads(s); b=json.loads(r)[:3]; assert b == a, f"prediction parity mismatch for {i!r}: swift={a!r} rust={b!r}"' "$input" "$swift_json" "$rust_json"
+          done
+
+          for input in "わたしは"; do
+            swift_output="$(swift run --package-path converter-swift AzooKeyPredictionOracle "$input" 2>&1)"
+            diagnostics_json="$(printf '%s\n' "$swift_output" \
+              | sed -n 's/^AZOOKEY_PREDICTION_DIAGNOSTICS_JSON=//p' \
+              | tail -n 1)"
+            test -n "$diagnostics_json"
+
+            path_json="$(python3 -c 'import json,sys; print(json.dumps(json.loads(sys.argv[1])["path"], ensure_ascii=False, separators=(",",":")))' "$diagnostics_json")"
+            rust_json="$(cargo run --quiet \
+              --manifest-path converter-rust/Cargo.toml \
+              --bin prediction_path_oracle -- \
+              "$dictionary_path" "$path_json" 3)"
+
+            python3 -c 'import json,sys; i,d,r=sys.argv[1:4]; expected=json.loads(d)["predictions"]; actual=json.loads(r); assert actual == expected, f"path prediction parity mismatch for {i!r}: swift={expected!r} rust={actual!r}"' "$input" "$diagnostics_json" "$rust_json"
           done
 
   android-integration:

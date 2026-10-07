@@ -89,6 +89,66 @@ public enum AzooKeyAndroidConverter {
         }
         return String(decoding: encoded, as: UTF8.self)
     }
+
+    public static func predictionDiagnosticsJSON(_ input: String) -> String {
+        guard !input.isEmpty else {
+            return #"{"predictions":[],"path":[]}"#
+        }
+
+        var composingText = ComposingText()
+        composingText.insertAtCursorPosition(input, inputStyle: .direct)
+
+        let diagnostics = storage.withConverter { converter in
+            let result = converter.requestCandidates(
+                composingText,
+                options: ConvertRequestOptions(
+                    N_best: 10,
+                    requireJapanesePrediction: .manualMix,
+                    requireEnglishPrediction: .disabled,
+                    keyboardLanguage: .ja_JP,
+                    englishCandidateInRoman2KanaInput: false,
+                    fullWidthRomanCandidate: false,
+                    halfWidthKanaCandidate: false,
+                    learningType: .nothing,
+                    maxMemoryCount: 0,
+                    shouldResetMemory: false,
+                    memoryDirectoryURL: storage.workingDirectory,
+                    sharedContainerURL: storage.workingDirectory,
+                    textReplacer: .empty,
+                    specialCandidateProviders: nil,
+                    metadata: .init(versionString: "azooKey-Android")
+                )
+            )
+
+            let predictions = Array(result.predictionResults.prefix(3).map(\.text))
+            let targetRuby = dictionaryReading(input)
+            let pathCandidate = result.mainResults.first {
+                !$0.data.isEmpty && $0.data.map(\.ruby).joined() == targetRuby
+            } ?? result.mainResults.first {
+                !$0.data.isEmpty
+            }
+            let path = pathCandidate?.data.map {
+                PredictionPathElementWire(
+                    word: $0.word,
+                    ruby: $0.ruby,
+                    lcid: $0.lcid,
+                    rcid: $0.rcid,
+                    mid: $0.mid,
+                    value: Float($0.value())
+                )
+            } ?? []
+
+            return PredictionDiagnosticsWire(
+                predictions: predictions,
+                path: path
+            )
+        }
+
+        guard let encoded = try? JSONEncoder().encode(diagnostics) else {
+            return #"{"predictions":[],"path":[]}"#
+        }
+        return String(decoding: encoded, as: UTF8.self)
+    }
 }
 
 private final class ConverterStorage: @unchecked Sendable {
@@ -117,4 +177,29 @@ private final class ConverterStorage: @unchecked Sendable {
         defer { lock.unlock() }
         return operation(converter)
     }
+}
+
+
+private struct PredictionPathElementWire: Encodable {
+    let word: String
+    let ruby: String
+    let lcid: Int
+    let rcid: Int
+    let mid: Int
+    let value: Float
+}
+
+private struct PredictionDiagnosticsWire: Encodable {
+    let predictions: [String]
+    let path: [PredictionPathElementWire]
+}
+
+private func dictionaryReading(_ input: String) -> String {
+    let units = input.utf16.map { unit -> UInt16 in
+        if 0x3041 <= unit && unit <= 0x3096 {
+            return unit + 0x60
+        }
+        return unit
+    }
+    return String(decoding: units, as: UTF16.self)
 }
