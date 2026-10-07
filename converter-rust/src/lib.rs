@@ -711,6 +711,25 @@ mod tests {
         );
     }
 
+    #[test]
+    fn dictionary_reading_normalizes_hiragana_to_katakana() {
+        assert_eq!("アサッテ", dictionary_reading("あさって"));
+        assert_eq!("ヴァ", dictionary_reading("ゔぁ"));
+        assert_eq!("azooKeyー", dictionary_reading("azooKeyー"));
+    }
+
+    #[test]
+    fn words_json_uses_json_string_escaping() {
+        assert_eq!(
+            r#"["仮名","quote\\\"","line\\nbreak"]"#,
+            words_json(&[
+                "仮名".to_owned(),
+                "quote\\\"".to_owned(),
+                "line\\nbreak".to_owned(),
+            ]),
+        );
+    }
+
     #[derive(Default, Clone)]
     struct Node {
         children: BTreeMap<u8, Node>,
