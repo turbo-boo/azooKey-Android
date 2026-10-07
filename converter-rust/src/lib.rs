@@ -695,6 +695,7 @@ fn read_u32_le(bytes: &[u8], offset: usize) -> Result<u32, DictionaryError> {
 mod tests {
     use super::*;
     use std::collections::BTreeMap;
+    use std::sync::atomic::{AtomicU64, Ordering};
 
     #[test]
     fn escaped_identifier_matches_upstream_utf16_encoding() {
@@ -822,6 +823,38 @@ mod tests {
                 "line\\nbreak".to_owned(),
             ]),
         );
+    }
+
+    #[test]
+    fn prediction_usable_matches_upstream_terminal_filter_examples() {
+        for blocked in [33u16, 15, 372, 420, 25, 27, 404, 13, 373] {
+            assert!(!prediction_usable(blocked), "rcid {blocked} must be filtered");
+        }
+        for allowed in [0u16, 1, 32, 1319] {
+            assert!(prediction_usable(allowed), "rcid {allowed} must remain usable");
+        }
+    }
+
+    #[test]
+    fn dictionary_cache_reuses_open_dictionary() {
+        let root = temporary_dictionary_root("cache");
+        fs::create_dir_all(root.join("louds")).unwrap();
+        fs::write(root.join("louds/charID.chid"), "アサッテ").unwrap();
+
+        let first = cached_prediction_dictionary(&root).unwrap();
+        let second = cached_prediction_dictionary(&root).unwrap();
+
+        assert!(Arc::ptr_eq(&first, &second));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    fn temporary_dictionary_root(label: &str) -> PathBuf {
+        static NEXT_ID: AtomicU64 = AtomicU64::new(0);
+        let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
+        std::env::temp_dir().join(format!(
+            "azookey-rust-{label}-{}-{id}",
+            std::process::id(),
+        ))
     }
 
     #[derive(Default, Clone)]
