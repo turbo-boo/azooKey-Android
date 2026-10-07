@@ -63,6 +63,33 @@ class MainActivity : Activity() {
 
         root.addView(
             Button(this).apply {
+                text = getString(R.string.reset_learning)
+                isAllCaps = false
+                setOnClickListener {
+                    val reset = runCatching {
+                        val dictionaryRoot = java.io.File(
+                            noBackupFilesDir,
+                            "azookey-converter/dictionary-4d418525b090cf49c219819d05a7e3cc2a4346eb",
+                        )
+                        dev.turboboo.azookey.converter.AzooKeyAndroidJNI.resetLearningMemory(
+                            dictionaryRoot.absolutePath,
+                        )
+                    }.getOrDefault(false)
+                    android.widget.Toast.makeText(
+                        this@MainActivity,
+                        if (reset) R.string.reset_learning_done else R.string.reset_learning_failed,
+                        android.widget.Toast.LENGTH_SHORT,
+                    ).show()
+                }
+            },
+            ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ),
+        )
+
+        root.addView(
+            Button(this).apply {
                 text = getString(R.string.choose_keyboard)
                 isAllCaps = false
                 setOnClickListener {

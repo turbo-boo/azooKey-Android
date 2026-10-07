@@ -313,6 +313,12 @@ jobs:
           javap -classpath "$RUNNER_TEMP/converter-classes.jar" \
             dev.turboboo.azookey.converter.AzooKeyAndroidJNI \
             | grep -q 'replaceUserDictionaryJSON'
+          javap -classpath "$RUNNER_TEMP/converter-classes.jar" \
+            dev.turboboo.azookey.converter.AzooKeyAndroidJNI \
+            | grep -q 'learnCandidate'
+          javap -classpath "$RUNNER_TEMP/converter-classes.jar" \
+            dev.turboboo.azookey.converter.AzooKeyAndroidJNI \
+            | grep -q 'resetLearningMemory'
 
           rust_so="app/build/generated/rustJniLibs/x86_64/libazookey_prediction_rust.so"
           test -f "$rust_so"

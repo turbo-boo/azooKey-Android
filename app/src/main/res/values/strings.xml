@@ -13,4 +13,7 @@
     <string name="user_dictionary_delete">削除</string>
     <string name="user_dictionary_empty">登録済みの単語はありません。</string>
     <string name="user_dictionary_invalid">読みと単語を入力してください。重複する登録は追加されません。</string>
+    <string name="reset_learning">変換学習をリセット</string>
+    <string name="reset_learning_done">変換学習をリセットしました。</string>
+    <string name="reset_learning_failed">変換学習をリセットできませんでした。</string>
 </resources>
