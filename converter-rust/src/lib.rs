@@ -1470,6 +1470,60 @@ mod tests {
     }
 
     #[test]
+    fn prediction_seed_reconstructs_last_clause_context() {
+        let root = temporary_dictionary_root("prediction-seed");
+        fs::create_dir_all(root.join("louds")).unwrap();
+        fs::write(root.join("louds/charID.chid"), "ワタシハガッコウ").unwrap();
+
+        let dictionary = PredictionDictionary::open(&root).unwrap();
+        let path = vec![
+            DicdataElement {
+                word: "私".to_owned(),
+                ruby: "ワタシ".to_owned(),
+                lcid: 1285,
+                rcid: 1285,
+                mid: 1,
+                value: -2.0,
+            },
+            DicdataElement {
+                word: "は".to_owned(),
+                ruby: "ハ".to_owned(),
+                lcid: 261,
+                rcid: 261,
+                mid: 500,
+                value: -1.0,
+            },
+            DicdataElement {
+                word: "学校".to_owned(),
+                ruby: "ガッコウ".to_owned(),
+                lcid: 1285,
+                rcid: 1285,
+                mid: 2,
+                value: -3.0,
+            },
+        ];
+
+        let seed = dictionary
+            .prediction_seed_from_path(&path)
+            .unwrap()
+            .expect("prediction seed");
+
+        assert_eq!("ガッコウ", seed.ruby);
+        assert_eq!("私は", seed.prefix_text);
+        assert_eq!(
+            PredictionContext {
+                last_rcid: 261,
+                next_lcid: 1285,
+                last_mid: 1,
+                last_value: -53.0,
+            },
+            seed.context,
+        );
+
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn prediction_ranking_matches_upstream_formula_and_stable_ties() {
         let root = temporary_dictionary_root("ranking");
         fs::create_dir_all(root.join("louds")).unwrap();
