@@ -127,6 +127,40 @@ public func conversionBridgeJSON(
     }
 }
 
+public func replaceUserDictionaryJSON(
+    _ json: String,
+    _ dictionaryPath: String
+) -> Bool {
+    guard !dictionaryPath.isEmpty,
+          let data = json.data(using: .utf8),
+          let entries = try? JSONDecoder().decode([UserDictionaryEntryWire].self, from: data)
+    else {
+        return false
+    }
+
+    return AndroidConverterStorage.shared.withConverter(
+        dictionaryPath: dictionaryPath
+    ) { converter, _ in
+        converter.importDynamicUserDictionary(
+            entries.compactMap { entry in
+                let reading = dictionaryReading(entry.reading.trimmingCharacters(in: .whitespacesAndNewlines))
+                let word = entry.word.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !reading.isEmpty, !word.isEmpty else {
+                    return nil
+                }
+                return DicdataElement(
+                    word: word,
+                    ruby: reading,
+                    cid: CIDData.固有名詞.cid,
+                    mid: MIDData.一般.mid,
+                    value: -10
+                )
+            }
+        )
+        return true
+    }
+}
+
 public func predictionCandidatesJSON(
     _ input: String,
     _ dictionaryPath: String
@@ -170,6 +204,11 @@ public func predictionCandidatesJSON(
     }
 }
 
+
+private struct UserDictionaryEntryWire: Decodable {
+    let reading: String
+    let word: String
+}
 
 private struct ScoredCandidateWire: Encodable {
     let text: String

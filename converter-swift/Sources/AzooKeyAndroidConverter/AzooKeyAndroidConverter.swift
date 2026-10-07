@@ -14,6 +14,34 @@ import KanaKanjiConverterModuleWithDefaultDictionary
 public enum AzooKeyAndroidConverter {
     private static let storage = ConverterStorage()
 
+    public static func replaceUserDictionaryJSON(_ json: String) -> Bool {
+        guard let data = json.data(using: .utf8),
+              let entries = try? JSONDecoder().decode([UserDictionaryEntryWire].self, from: data)
+        else {
+            return false
+        }
+
+        storage.withConverter { converter in
+            converter.importDynamicUserDictionary(
+                entries.compactMap { entry in
+                    let reading = dictionaryReading(entry.reading.trimmingCharacters(in: .whitespacesAndNewlines))
+                    let word = entry.word.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !reading.isEmpty, !word.isEmpty else {
+                        return nil
+                    }
+                    return DicdataElement(
+                        word: word,
+                        ruby: reading,
+                        cid: CIDData.固有名詞.cid,
+                        mid: MIDData.一般.mid,
+                        value: -10
+                    )
+                }
+            )
+        }
+        return true
+    }
+
     public static func predictionCandidatesJSON(_ input: String) -> String {
         guard !input.isEmpty else {
             return "[]"
@@ -351,6 +379,11 @@ private struct SequentialPredictionParityWire: Encodable {
     let input: String
     let autoMix: [String]
     let bridge: ConversionBridgeWire
+}
+
+private struct UserDictionaryEntryWire: Decodable {
+    let reading: String
+    let word: String
 }
 
 private struct ScoredCandidateWire: Encodable {

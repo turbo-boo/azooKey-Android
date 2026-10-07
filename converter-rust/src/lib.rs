@@ -14,7 +14,7 @@
 //! License: MIT
 
 use jni::objects::{JClass, JString};
-use jni::sys::{jfloat, jint};
+use jni::sys::{jboolean, jfloat, jint};
 use jni::EnvUnowned;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -138,6 +138,12 @@ pub struct RankedPrediction {
 }
 
 #[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize)]
+struct UserDictionaryEntryWire {
+    reading: String,
+    word: String,
+}
+
 struct PredictionPathElementWire {
     word: String,
     ruby: String,
@@ -484,6 +490,7 @@ pub struct PredictionDictionary {
     loudstxt3_cache: Mutex<HashMap<String, Arc<Vec<u8>>>>,
     cc_cache: Mutex<HashMap<u16, Option<Arc<CcLine>>>>,
     mm_cache: Mutex<Option<Arc<Vec<f32>>>>,
+    dynamic_user_dictionary: Mutex<Vec<DicdataElement>>,
 }
 
 static PREDICTION_DICTIONARY_CACHE: OnceLock<
@@ -515,6 +522,7 @@ impl PredictionDictionary {
             loudstxt3_cache: Mutex::new(HashMap::new()),
             cc_cache: Mutex::new(HashMap::new()),
             mm_cache: Mutex::new(None),
+            dynamic_user_dictionary: Mutex::new(Vec::new()),
         })
     }
 
@@ -761,28 +769,39 @@ impl PredictionDictionary {
             .collect();
 
         let identifier = escaped_identifier(&first_character.to_string());
-        let Some(louds) = self.load_louds(&identifier)? else {
-            return Ok(Vec::new());
-        };
+        let mut result = if let Some(louds) = self.load_louds(&identifier)? {
+            let character_count = key.chars().count();
+            let max_depth = match character_count {
+                1 => 3,
+                2 => 5,
+                _ => usize::MAX,
+            };
 
-        let character_count = key.chars().count();
-        let max_depth = match character_count {
-            1 => 3,
-            2 => 5,
-            _ => usize::MAX,
-        };
-
-        let mut indices =
-            louds.prefix_node_indices(&char_ids, max_depth, PREDICTION_MAX_COUNT);
-        if include_exact_match && indices.len() < PREDICTION_MAX_COUNT {
-            if let Some(exact_index) = louds.search_node_index(&char_ids) {
-                indices.push(exact_index);
+            let mut indices =
+                louds.prefix_node_indices(&char_ids, max_depth, PREDICTION_MAX_COUNT);
+            if include_exact_match && indices.len() < PREDICTION_MAX_COUNT {
+                if let Some(exact_index) = louds.search_node_index(&char_ids) {
+                    indices.push(exact_index);
+                }
             }
-        }
 
-        indices.sort_unstable();
-        indices.dedup();
-        self.read_loudstxt3_entries(&identifier, &indices)
+            indices.sort_unstable();
+            indices.dedup();
+            self.read_loudstxt3_entries(&identifier, &indices)?
+        } else {
+            Vec::new()
+        };
+
+        let dynamic_entries = self
+            .dynamic_user_dictionary
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .iter()
+            .filter(|entry| entry.ruby.starts_with(key))
+            .cloned()
+            .collect::<Vec<_>>();
+        result.extend(dynamic_entries);
+        Ok(result)
     }
 
     fn load_louds(
@@ -1113,6 +1132,46 @@ fn cached_prediction_dictionary(
         .clone())
 }
 
+fn user_dictionary_from_json(
+    json: &str,
+) -> Result<Vec<DicdataElement>, DictionaryError> {
+    let entries: Vec<UserDictionaryEntryWire> = serde_json::from_str(json)
+        .map_err(|_| DictionaryError::InvalidFormat("user dictionary JSON is invalid"))?;
+
+    Ok(entries
+        .into_iter()
+        .filter_map(|entry| {
+            let reading = dictionary_reading(entry.reading.trim());
+            let word = entry.word.trim().to_owned();
+            if reading.is_empty() || word.is_empty() {
+                return None;
+            }
+            Some(DicdataElement {
+                word,
+                ruby: reading,
+                lcid: 1288,
+                rcid: 1288,
+                mid: 501,
+                value: -10.0,
+            })
+        })
+        .collect())
+}
+
+pub fn replace_user_dictionary_json(
+    dictionary_path: impl AsRef<Path>,
+    json: &str,
+) -> Result<(), DictionaryError> {
+    let entries = user_dictionary_from_json(json)?;
+    let dictionary = cached_prediction_dictionary(dictionary_path)?;
+    let mut dynamic_user_dictionary = dictionary
+        .dynamic_user_dictionary
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    *dynamic_user_dictionary = entries;
+    Ok(())
+}
+
 pub fn dictionary_reading(input: &str) -> String {
     input
         .chars()
@@ -1386,6 +1445,25 @@ pub extern "system" fn Java_dev_turboboo_azookey_ime_RustPredictionBridge_prefix
             Err(_) => "[]".to_owned(),
         };
         JString::from_str(env, json)
+    });
+    outcome.resolve::<jni::errors::ThrowRuntimeExAndDefault>()
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_turboboo_azookey_ime_RustPredictionBridge_replaceUserDictionaryJson<'caller>(
+    mut unowned_env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
+    dictionary_path: JString<'caller>,
+    json: JString<'caller>,
+) -> jboolean {
+    let outcome = unowned_env.with_env(|_env| -> Result<jboolean, jni::errors::Error> {
+        let dictionary_path: String = dictionary_path.to_string();
+        let json: String = json.to_string();
+        Ok(if replace_user_dictionary_json(&dictionary_path, &json).is_ok() {
+            1
+        } else {
+            0
+        })
     });
     outcome.resolve::<jni::errors::ThrowRuntimeExAndDefault>()
 }
