@@ -222,6 +222,65 @@ private class JsonStringArrayParser(
 }
 
 
+internal data class ConversionBridgeData(
+    val candidates: List<ScoredCandidate>,
+    val pathJson: String,
+)
+
+internal fun parseConversionBridgeJson(json: String): ConversionBridgeData =
+    runCatching {
+        val root = org.json.JSONObject(json)
+        val candidatesJson = root.optJSONArray("candidates")
+        val candidates = buildList {
+            if (candidatesJson != null) {
+                for (index in 0 until candidatesJson.length()) {
+                    val item = candidatesJson.optJSONObject(index) ?: continue
+                    val text = item.optString("text", "")
+                    if (text.isBlank()) {
+                        continue
+                    }
+                    add(
+                        ScoredCandidate(
+                            text = text,
+                            value = item.optDouble("value", Double.NEGATIVE_INFINITY).toFloat(),
+                            exactRuby = item.optBoolean("exactRuby", false),
+                        ),
+                    )
+                }
+            }
+        }
+
+        ConversionBridgeData(
+            candidates = candidates,
+            pathJson = root.optJSONArray("path")?.toString() ?: "[]",
+        )
+    }.getOrDefault(
+        ConversionBridgeData(
+            candidates = emptyList(),
+            pathJson = "[]",
+        ),
+    )
+
+internal fun parseScoredPredictionJson(json: String): List<ScoredCandidate> =
+    runCatching {
+        val array = org.json.JSONArray(json)
+        buildList {
+            for (index in 0 until array.length()) {
+                val item = array.optJSONObject(index) ?: continue
+                val text = item.optString("word", "")
+                if (text.isBlank()) {
+                    continue
+                }
+                add(
+                    ScoredCandidate(
+                        text = text,
+                        value = item.optDouble("score", Double.NEGATIVE_INFINITY).toFloat(),
+                    ),
+                )
+            }
+        }
+    }.getOrDefault(emptyList())
+
 internal data class PredictionShadowDiagnostics(
     val predictions: List<String>,
     val pathJson: String,
