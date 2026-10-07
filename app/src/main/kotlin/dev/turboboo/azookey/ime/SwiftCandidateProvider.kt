@@ -30,7 +30,19 @@ internal class SwiftCandidateProvider(
                 dictionaryPath,
             ),
         )
-        predictionShadow?.observe(input, dictionaryPath)
+        if let predictionShadow {
+            val swiftPredictions = parseCandidateJson(
+                AzooKeyAndroidJNI.predictionCandidatesJSON(
+                    input,
+                    dictionaryPath,
+                ),
+            )
+            predictionShadow.observe(
+                input = input,
+                dictionaryPath = dictionaryPath,
+                swiftPredictions = swiftPredictions,
+            )
+        }
         return candidates
     }
 

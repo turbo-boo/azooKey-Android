@@ -57,6 +57,49 @@ public func candidatesJSON(
     }
 }
 
+public func predictionCandidatesJSON(
+    _ input: String,
+    _ dictionaryPath: String
+) -> String {
+    guard !input.isEmpty, !dictionaryPath.isEmpty else {
+        return "[]"
+    }
+
+    return AndroidConverterStorage.shared.withConverter(
+        dictionaryPath: dictionaryPath
+    ) { converter, workingDirectory in
+        var composingText = ComposingText()
+        composingText.insertAtCursorPosition(input, inputStyle: .direct)
+
+        let result = converter.requestCandidates(
+            composingText,
+            options: ConvertRequestOptions(
+                N_best: 10,
+                requireJapanesePrediction: .manualMix,
+                requireEnglishPrediction: .disabled,
+                keyboardLanguage: .ja_JP,
+                englishCandidateInRoman2KanaInput: false,
+                fullWidthRomanCandidate: false,
+                halfWidthKanaCandidate: false,
+                learningType: .nothing,
+                maxMemoryCount: 0,
+                shouldResetMemory: false,
+                memoryDirectoryURL: workingDirectory,
+                sharedContainerURL: workingDirectory,
+                textReplacer: .empty,
+                specialCandidateProviders: nil,
+                metadata: .init(versionString: "azooKey-Android")
+            )
+        )
+
+        let candidates = Array(result.predictionResults.prefix(3).map(\.text))
+        guard let encoded = try? JSONEncoder().encode(candidates) else {
+            return "[]"
+        }
+        return String(decoding: encoded, as: UTF8.self)
+    }
+}
+
 private final class AndroidConverterStorage: @unchecked Sendable {
     static let shared = AndroidConverterStorage()
 

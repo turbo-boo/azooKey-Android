@@ -17,11 +17,54 @@ class RustPredictionShadowTest {
         shadow.observe(
             input = "あさって",
             dictionaryPath = "/tmp/dictionary",
+            swiftPredictions = listOf("明後日"),
         )
 
         assertEquals(
             listOf("あさって" to "/tmp/dictionary"),
             calls,
+        )
+    }
+
+    @Test
+    fun matchingPredictionsDoNotReportMismatch() {
+        val mismatches = mutableListOf<PredictionParityMismatch>()
+        val shadow = RustPredictionShadow(
+            native = RustPredictionNative { _, _ -> """["明後日","あさって"]""" },
+            onMismatch = mismatches::add,
+        )
+
+        shadow.observe(
+            input = "あさって",
+            dictionaryPath = "/tmp/dictionary",
+            swiftPredictions = listOf("明後日", "あさって"),
+        )
+
+        assertEquals(emptyList<PredictionParityMismatch>(), mismatches)
+    }
+
+    @Test
+    fun differingPredictionsReportBothSides() {
+        val mismatches = mutableListOf<PredictionParityMismatch>()
+        val shadow = RustPredictionShadow(
+            native = RustPredictionNative { _, _ -> """["明後日","明々後日"]""" },
+            onMismatch = mismatches::add,
+        )
+
+        shadow.observe(
+            input = "あさって",
+            dictionaryPath = "/tmp/dictionary",
+            swiftPredictions = listOf("明後日", "あさって"),
+        )
+
+        assertEquals(
+            listOf(
+                PredictionParityMismatch(
+                    swiftPredictions = listOf("明後日", "あさって"),
+                    rustPredictions = listOf("明後日", "明々後日"),
+                ),
+            ),
+            mismatches,
         )
     }
 
@@ -38,6 +81,7 @@ class RustPredictionShadowTest {
         shadow.observe(
             input = "",
             dictionaryPath = "/tmp/dictionary",
+            swiftPredictions = emptyList(),
         )
 
         assertEquals(0, callCount)
@@ -54,6 +98,7 @@ class RustPredictionShadowTest {
         shadow.observe(
             input = "あさって",
             dictionaryPath = "/tmp/dictionary",
+            swiftPredictions = listOf("明後日"),
         )
     }
 }
