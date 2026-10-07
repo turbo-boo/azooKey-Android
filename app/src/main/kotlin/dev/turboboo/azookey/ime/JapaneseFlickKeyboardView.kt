@@ -1,7 +1,6 @@
 package dev.turboboo.azookey.ime
 
 import android.content.Context
-import android.graphics.Color
 import android.os.Handler
 import android.os.Looper
 import android.util.AttributeSet
@@ -22,6 +21,7 @@ import dev.turboboo.azookey.core.JapaneseFlickLayout
 import dev.turboboo.azookey.core.JapaneseSymbolsFlickLayout
 import dev.turboboo.azookey.core.NumberSymbolsFlickLayout
 import dev.turboboo.azookey.core.PointF2
+import kotlin.math.roundToInt
 
 /*
  * The 4-row x 5-column flick grids are ported from azooKey's built-in
@@ -56,21 +56,31 @@ class JapaneseFlickKeyboardView(
         NUMBER_SYMBOLS,
     }
 
-    private val keyHeight = dp(54)
-    private val gap = dp(2)
+    private data class KeyCell(
+        val row: Int,
+        val column: Int,
+        val rowSpan: Int,
+    )
+
+    private val density = resources.displayMetrics.density
+    private var currentMetrics: AzooKeyVisualDesign.Metrics? = null
     private val candidateRow = LinearLayout(context).apply {
         orientation = HORIZONTAL
-        minimumHeight = dp(42)
+        gravity = Gravity.CENTER_VERTICAL
+        setPadding(dp(5), 0, dp(5), 0)
     }
+    private val candidateArea: HorizontalScrollView = createCandidateArea()
+    private var currentGrid: GridLayout? = null
     private var keyboardMode = KeyboardMode.HIRAGANA
     private var latinUppercase = false
 
     init {
         orientation = VERTICAL
-        setPadding(gap, gap, gap, gap)
+        setPadding(0, 0, 0, 0)
+        setBackgroundColor(AzooKeyViewStyle.palette(context).background)
 
-        addView(createCandidateArea())
-        addView(createGrid())
+        addView(candidateArea)
+        addView(createGrid().also { currentGrid = it })
     }
 
     fun setCandidates(candidates: List<String>) {
@@ -82,37 +92,128 @@ class JapaneseFlickKeyboardView(
             .distinct()
             .take(10)
             .forEach { candidate ->
+                val button = Button(context).apply {
+                    text = candidate
+                    gravity = Gravity.CENTER
+                    AzooKeyViewStyle.styleCandidate(this)
+                    setOnClickListener {
+                        callbacks.onCandidate(candidate)
+                    }
+                }
                 candidateRow.addView(
-                    Button(context).apply {
-                        text = candidate
-                        isAllCaps = false
-                        textSize = 16f
-                        gravity = Gravity.CENTER
-                        setPadding(dp(12), 0, dp(12), 0)
-                        setOnClickListener {
-                            callbacks.onCandidate(candidate)
-                        }
-                    },
-                    ViewGroup.LayoutParams(
+                    button,
+                    LinearLayout.LayoutParams(
                         ViewGroup.LayoutParams.WRAP_CONTENT,
-                        dp(42),
-                    ),
+                        candidateButtonHeight(),
+                    ).apply {
+                        marginEnd = dp(AzooKeyVisualDesign.CANDIDATE_SPACING_DP.toInt())
+                    },
                 )
             }
     }
 
-    private fun createCandidateArea(): View =
+    override fun onMeasure(
+        widthMeasureSpec: Int,
+        heightMeasureSpec: Int,
+    ) {
+        val width = View.MeasureSpec.getSize(widthMeasureSpec)
+        if (width > 0) {
+            val metrics = AzooKeyVisualDesign.phonePortrait(
+                widthPx = width.toFloat(),
+                density = density,
+            )
+            currentMetrics = metrics
+            applyMetrics(metrics)
+
+            val desiredHeight = metrics.keyboardHeightPx.roundToInt()
+            val resolvedHeight = when (View.MeasureSpec.getMode(heightMeasureSpec)) {
+                View.MeasureSpec.EXACTLY -> View.MeasureSpec.getSize(heightMeasureSpec)
+                View.MeasureSpec.AT_MOST ->
+                    minOf(desiredHeight, View.MeasureSpec.getSize(heightMeasureSpec))
+                else -> desiredHeight
+            }
+            super.onMeasure(
+                widthMeasureSpec,
+                View.MeasureSpec.makeMeasureSpec(
+                    resolvedHeight,
+                    View.MeasureSpec.EXACTLY,
+                ),
+            )
+            return
+        }
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+    }
+
+    private fun createCandidateArea(): HorizontalScrollView =
         HorizontalScrollView(context).apply {
             isHorizontalScrollBarEnabled = false
+            isFillViewport = false
+            clipToPadding = false
             contentDescription = "Prediction candidates"
+            setBackgroundColor(AzooKeyViewStyle.palette(context).resultBackground)
             addView(
                 candidateRow,
                 ViewGroup.LayoutParams(
                     ViewGroup.LayoutParams.WRAP_CONTENT,
-                    dp(42),
+                    ViewGroup.LayoutParams.MATCH_PARENT,
                 ),
             )
         }
+
+    private fun candidateButtonHeight(): Int =
+        currentMetrics?.candidateButtonHeightPx?.roundToInt() ?: dp(28)
+
+    private fun applyMetrics(metrics: AzooKeyVisualDesign.Metrics) {
+        val barSectionHeight =
+            (metrics.keyboardBarHeightPx +
+                AzooKeyVisualDesign.KEYBOARD_VERTICAL_PADDING_DP * density)
+                .roundToInt()
+        candidateArea.layoutParams = LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            barSectionHeight,
+        )
+        candidateArea.setPadding(0, dp(6), 0, dp(6))
+
+        for (index in 0 until candidateRow.childCount) {
+            val child = candidateRow.getChildAt(index)
+            val params = child.layoutParams as LinearLayout.LayoutParams
+            params.height = metrics.candidateButtonHeightPx.roundToInt()
+            child.layoutParams = params
+        }
+
+        val grid = currentGrid ?: return
+        val gridHeight =
+            (metrics.keyboardHeightPx - barSectionHeight).roundToInt()
+        grid.layoutParams = LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            gridHeight,
+        )
+        val horizontalInset = metrics.horizontalInsetPx.roundToInt()
+        grid.setPadding(horizontalInset, 0, horizontalInset, 0)
+
+        for (index in 0 until grid.childCount) {
+            val child = grid.getChildAt(index)
+            val cell = child.tag as? KeyCell ?: continue
+            val params = child.layoutParams as GridLayout.LayoutParams
+            params.width = metrics.keyWidthPx.roundToInt()
+            params.height =
+                (
+                    metrics.keyHeightPx * cell.rowSpan +
+                        metrics.verticalSpacingPx * (cell.rowSpan - 1)
+                    ).roundToInt()
+            params.setMargins(
+                0,
+                0,
+                if (cell.column < 4) metrics.horizontalSpacingPx.roundToInt() else 0,
+                if (cell.row + cell.rowSpan < 4) {
+                    metrics.verticalSpacingPx.roundToInt()
+                } else {
+                    0
+                },
+            )
+            child.layoutParams = params
+        }
+    }
 
     private fun createGrid(): GridLayout =
         GridLayout(context).apply {
@@ -135,18 +236,21 @@ class JapaneseFlickKeyboardView(
             label = "☆123",
             row = 0,
             column = 0,
+            selected = keyboardMode == KeyboardMode.NUMBER_SYMBOLS,
             onClick = { switchKeyboardMode(KeyboardMode.NUMBER_SYMBOLS) },
         )
         addSpecialKey(
             label = "ABC",
             row = 1,
             column = 0,
+            selected = keyboardMode == KeyboardMode.LATIN,
             onClick = { switchKeyboardMode(KeyboardMode.LATIN) },
         )
         addSpecialKey(
             label = "あいう",
             row = 2,
             column = 0,
+            selected = keyboardMode == KeyboardMode.HIRAGANA,
             onClick = { switchKeyboardMode(KeyboardMode.HIRAGANA) },
         )
         addSpecialKey("🌐", row = 3, column = 0, onClick = callbacks::onNextKeyboard)
@@ -165,7 +269,13 @@ class JapaneseFlickKeyboardView(
         addFlickKey(kana("や"), row = 2, column = 2)
         addFlickKey(kana("ら"), row = 2, column = 3)
 
-        addSpecialKey("小ﾞﾟ", row = 3, column = 1, onClick = callbacks::onChangeCharacterType)
+        addSpecialKey(
+            "小ﾞﾟ",
+            row = 3,
+            column = 1,
+            special = false,
+            onClick = callbacks::onChangeCharacterType,
+        )
         addFlickKey(kana("わ"), row = 3, column = 2)
         addFlickKey(JapaneseSymbolsFlickLayout.key, row = 3, column = 3)
     }
@@ -183,7 +293,14 @@ class JapaneseFlickKeyboardView(
         addFlickKey(english("TUV"), row = 2, column = 2)
         addFlickKey(english("WXYZ"), row = 2, column = 3)
 
-        addSpecialKey("a/A", row = 3, column = 1, onClick = ::toggleLatinCase)
+        addSpecialKey(
+            "a/A",
+            row = 3,
+            column = 1,
+            special = false,
+            selected = latinUppercase,
+            onClick = ::toggleLatinCase,
+        )
         addFlickKey(english("'\"()"), row = 3, column = 2)
         addFlickKey(english(".,?!"), row = 3, column = 3)
     }
@@ -208,7 +325,13 @@ class JapaneseFlickKeyboardView(
 
     private fun GridLayout.addEditorKeys() {
         addRepeatingDeleteKey(row = 0, column = 4)
-        addSpecialKey("空白", row = 1, column = 4, onClick = callbacks::onSpace)
+        addSpecialKey(
+            "空白",
+            row = 1,
+            column = 4,
+            special = false,
+            onClick = callbacks::onSpace,
+        )
         addSpecialKey(
             "↵",
             row = 2,
@@ -233,10 +356,11 @@ class JapaneseFlickKeyboardView(
     }
 
     private fun replaceGrid() {
-        if (childCount > 1) {
-            removeViewAt(1)
-        }
-        addView(createGrid(), 1)
+        currentGrid?.let(::removeView)
+        val grid = createGrid()
+        currentGrid = grid
+        addView(grid, 1)
+        currentMetrics?.let(::applyMetrics)
     }
 
     private fun GridLayout.addFlickKey(
@@ -244,12 +368,19 @@ class JapaneseFlickKeyboardView(
         row: Int,
         column: Int,
     ) {
+        val button = FlickKeyButton(
+            context = context,
+            key = key,
+            onInput = callbacks::onText,
+        ).apply {
+            tag = KeyCell(row, column, 1)
+            AzooKeyViewStyle.styleKey(
+                button = this,
+                special = false,
+            )
+        }
         addView(
-            FlickKeyButton(
-                context = context,
-                key = key,
-                onInput = callbacks::onText,
-            ),
+            button,
             keyLayoutParams(row, column),
         )
     }
@@ -258,12 +389,19 @@ class JapaneseFlickKeyboardView(
         row: Int,
         column: Int,
     ) {
+        val button = RepeatingActionButton(
+            context = context,
+            label = "⌫",
+            onAction = callbacks::onDelete,
+        ).apply {
+            tag = KeyCell(row, column, 1)
+            AzooKeyViewStyle.styleKey(
+                button = this,
+                special = true,
+            )
+        }
         addView(
-            RepeatingActionButton(
-                context = context,
-                label = "⌫",
-                onAction = callbacks::onDelete,
-            ),
+            button,
             keyLayoutParams(row, column),
         )
     }
@@ -274,19 +412,26 @@ class JapaneseFlickKeyboardView(
         column: Int,
         rowSpan: Int = 1,
         enabled: Boolean = true,
+        special: Boolean = true,
+        selected: Boolean = false,
         onClick: (() -> Unit)? = null,
     ) {
+        val button = Button(context).apply {
+            text = label
+            gravity = Gravity.CENTER
+            isEnabled = enabled
+            alpha = if (enabled) 1f else 0.45f
+            setPadding(0, 0, 0, 0)
+            tag = KeyCell(row, column, rowSpan)
+            AzooKeyViewStyle.styleKey(
+                button = this,
+                special = special,
+                selected = selected,
+            )
+            setOnClickListener { onClick?.invoke() }
+        }
         addView(
-            Button(context).apply {
-                text = label
-                isAllCaps = false
-                textSize = 15f
-                gravity = Gravity.CENTER
-                isEnabled = enabled
-                alpha = if (enabled) 1f else 0.45f
-                setPadding(0, 0, 0, 0)
-                setOnClickListener { onClick?.invoke() }
-            },
+            button,
             keyLayoutParams(row, column, rowSpan),
         )
     }
@@ -297,12 +442,11 @@ class JapaneseFlickKeyboardView(
         rowSpan: Int = 1,
     ): GridLayout.LayoutParams =
         GridLayout.LayoutParams(
-            GridLayout.spec(row, rowSpan, 1f),
-            GridLayout.spec(column, 1, 1f),
+            GridLayout.spec(row, rowSpan),
+            GridLayout.spec(column, 1),
         ).apply {
             width = 0
-            height = keyHeight * rowSpan
-            setMargins(gap, gap, gap, gap)
+            height = 0
         }
 
     private fun kana(center: String): FlickKey =
@@ -338,10 +482,8 @@ private class FlickKeyButton @JvmOverloads constructor(
     init {
         text = key.label
         isAllCaps = false
-        textSize = 20f
         gravity = Gravity.CENTER
         setPadding(0, 0, 0, 0)
-        setTextColor(Color.BLACK)
 
         setOnTouchListener { _, event ->
             when (event.actionMasked) {
