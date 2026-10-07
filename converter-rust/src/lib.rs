@@ -1442,6 +1442,17 @@ mod tests {
     }
 
     #[test]
+    fn clause_boundary_matches_upstream_word_type_rules() {
+        assert!(!is_clause(0, 1285));
+        assert!(!is_clause(1285, 1316));
+        assert!(!is_clause(1315, 1285));
+        assert!(!is_clause(1285, 7));
+        assert!(is_clause(7, 1285));
+        assert!(is_clause(1285, 1285));
+        assert!(is_clause(1285, 1315));
+    }
+
+    #[test]
     fn prediction_ranking_matches_upstream_formula_and_stable_ties() {
         let root = temporary_dictionary_root("ranking");
         fs::create_dir_all(root.join("louds")).unwrap();
