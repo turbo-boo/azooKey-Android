@@ -122,7 +122,7 @@ impl Louds {
             flat_char_to_node_indices_index[index] = value as u32;
         }
 
-        let mut rank_large = Vec::with_capacity(bits.len() + 1);
+        let mut rank_large: Vec<u32> = Vec::with_capacity(bits.len() + 1);
         rank_large.push(0);
         for &word in &bits {
             let previous = *rank_large
@@ -543,7 +543,7 @@ fn parse_loudstxt3_payload(
 
     let text = std::str::from_utf8(&payload[text_offset..])
         .map_err(|_| DictionaryError::InvalidFormat("loudstxt3 text is not UTF-8"))?;
-    let fields: Vec<&str> = text.split('	').collect();
+    let fields: Vec<&str> = text.split('\\t').collect();
     if fields.len() < count + 1 {
         return Err(DictionaryError::InvalidFormat(
             "loudstxt3 text field count does not match row count",
