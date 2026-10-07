@@ -264,6 +264,8 @@ jobs:
             | grep -q 'Java_dev_turboboo_azookey_ime_RustPredictionBridge_prefixWordsJson'
           nm -D "$rust_so" \
             | grep -q 'Java_dev_turboboo_azookey_ime_RustPredictionBridge_prefixWordsWithContextJson'
+          nm -D "$rust_so" \
+            | grep -q 'Java_dev_turboboo_azookey_ime_RustPredictionBridge_prefixWordsFromPathJson'
 
           unzip -l "$aar" | grep -q 'assets/azookey_dictionary/'
           unzip -l "$apk" | grep -q 'assets/azookey_dictionary/'

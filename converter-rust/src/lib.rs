@@ -1229,6 +1229,22 @@ pub fn ranked_prefix_words_json(
     }
 }
 
+pub fn ranked_prediction_path_json(
+    path_json: &str,
+    dictionary_path: impl AsRef<Path>,
+    n_best: usize,
+) -> String {
+    let result = prediction_path_from_json(path_json).and_then(|path| {
+        let dictionary = cached_prediction_dictionary(dictionary_path)?;
+        dictionary.ranked_path_prediction_words(&path, n_best)
+    });
+
+    match result {
+        Ok(words) => words_json(&words),
+        Err(_) => "[]".to_owned(),
+    }
+}
+
 fn raw_prefix_words_json(input: &str, dictionary_path: &str) -> String {
     ranked_prefix_words_json(input, dictionary_path, 10)
 }
@@ -1292,6 +1308,30 @@ pub extern "system" fn Java_dev_turboboo_azookey_ime_RustPredictionBridge_prefix
             _ => "[]".to_owned(),
         };
 
+        JString::from_str(env, json)
+    });
+    outcome.resolve::<jni::errors::ThrowRuntimeExAndDefault>()
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_turboboo_azookey_ime_RustPredictionBridge_prefixWordsFromPathJson<'caller>(
+    mut unowned_env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
+    path_json: JString<'caller>,
+    dictionary_path: JString<'caller>,
+    n_best: jint,
+) -> JString<'caller> {
+    let outcome = unowned_env.with_env(|env| -> Result<_, jni::errors::Error> {
+        let path_json: String = path_json.to_string();
+        let dictionary_path: String = dictionary_path.to_string();
+        let json = match usize::try_from(n_best) {
+            Ok(n_best) => ranked_prediction_path_json(
+                &path_json,
+                &dictionary_path,
+                n_best,
+            ),
+            Err(_) => "[]".to_owned(),
+        };
         JString::from_str(env, json)
     });
     outcome.resolve::<jni::errors::ThrowRuntimeExAndDefault>()
