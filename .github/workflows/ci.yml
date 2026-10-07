@@ -94,20 +94,19 @@ jobs:
               --bin prediction_oracle -- \
               "$dictionary_path" "$input" 5)"
 
-            python3 - "$input" "$swift_json" "$rust_json" <<'PY'
+            python3 -c '
 import json
 import sys
 
 input_text, swift_raw, rust_raw = sys.argv[1:4]
 swift_candidates = json.loads(swift_raw)
 rust_candidates = json.loads(rust_raw)[:3]
-
 if rust_candidates != swift_candidates:
     raise SystemExit(
         f"prediction parity mismatch for {input_text!r}: "
         f"swift={swift_candidates!r} rust={rust_candidates!r}"
     )
-PY
+' "$input" "$swift_json" "$rust_json"
           done
 
   android-integration:
