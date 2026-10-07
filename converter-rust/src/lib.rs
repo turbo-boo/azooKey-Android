@@ -13,9 +13,11 @@
 //! Original implementation author: Miwa / Ensan
 //! License: MIT
 
-use std::collections::{BTreeMap, HashMap};
+use jni::objects::{JClass, JString};
+use jni::EnvUnowned;
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::error::Error;
-use std::fmt;
+use std::fmt::{self, Write};
 use std::fs;
 use std::io;
 use std::ops::Range;
@@ -464,6 +466,98 @@ impl PredictionDictionary {
         }
         Ok(result)
     }
+}
+
+pub fn dictionary_reading(input: &str) -> String {
+    input
+        .chars()
+        .map(|character| {
+            let codepoint = character as u32;
+            if (0x3041..=0x3096).contains(&codepoint) {
+                char::from_u32(codepoint + 0x60).unwrap_or(character)
+            } else {
+                character
+            }
+        })
+        .collect()
+}
+
+pub fn raw_prefix_words(
+    input: &str,
+    dictionary_path: impl AsRef<Path>,
+) -> Result<Vec<String>, DictionaryError> {
+    if input.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let dictionary = PredictionDictionary::open(dictionary_path)?;
+    let reading = dictionary_reading(input);
+    let entries = dictionary.raw_prefix_entries(&reading, true)?;
+
+    let mut seen = HashSet::new();
+    Ok(entries
+        .into_iter()
+        .filter_map(|entry| {
+            if entry.word.is_empty() || !seen.insert(entry.word.clone()) {
+                None
+            } else {
+                Some(entry.word)
+            }
+        })
+        .collect())
+}
+
+fn words_json(words: &[String]) -> String {
+    let mut output = String::from("[");
+    for (index, word) in words.iter().enumerate() {
+        if index != 0 {
+            output.push(',');
+        }
+        output.push('"');
+        for character in word.chars() {
+            match character {
+                '"' => output.push_str("\\\""),
+                '\\' => output.push_str("\\\\"),
+                '\n' => output.push_str("\\n"),
+                '\r' => output.push_str("\\r"),
+                '\t' => output.push_str("\\t"),
+                '\u{0008}' => output.push_str("\\b"),
+                '\u{000C}' => output.push_str("\\f"),
+                control if control <= '\u{001F}' => {
+                    let _ = write!(output, "\\u{:04X}", control as u32);
+                }
+                other => output.push(other),
+            }
+        }
+        output.push('"');
+    }
+    output.push(']');
+    output
+}
+
+fn raw_prefix_words_json(input: &str, dictionary_path: &str) -> String {
+    match raw_prefix_words(input, dictionary_path) {
+        Ok(words) => words_json(&words),
+        Err(_) => "[]".to_owned(),
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_turboboo_azookey_ime_RustPredictionBridge_prefixWordsJson<'caller>(
+    mut unowned_env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
+    input: JString<'caller>,
+    dictionary_path: JString<'caller>,
+) -> JString<'caller> {
+    let outcome = unowned_env.with_env(|env| -> Result<_, jni::errors::Error> {
+        let input: String = input.to_string();
+        let dictionary_path: String = dictionary_path.to_string();
+        JString::from_str(
+            env,
+            raw_prefix_words_json(&input, &dictionary_path),
+        )
+    });
+    outcome.resolve::<jni::errors::ThrowRuntimeExAndDefault>()
 }
 
 pub fn escaped_identifier(input: &str) -> String {

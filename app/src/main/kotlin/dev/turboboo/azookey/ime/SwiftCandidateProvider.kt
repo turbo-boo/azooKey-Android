@@ -11,6 +11,7 @@ private const val DICTIONARY_REVISION = "4d418525b090cf49c219819d05a7e3cc2a4346e
 
 class SwiftCandidateProvider(
     context: Context,
+    private val predictionShadow: PredictionShadow? = null,
 ) : CandidateProvider {
     private val appContext = context.applicationContext
     private val dictionaryDirectory: File by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
@@ -22,12 +23,15 @@ class SwiftCandidateProvider(
             return emptyList()
         }
 
-        return parseCandidateJson(
+        val dictionaryPath = dictionaryDirectory.absolutePath
+        val candidates = parseCandidateJson(
             AzooKeyAndroidJNI.candidatesJSON(
                 input,
-                dictionaryDirectory.absolutePath,
+                dictionaryPath,
             ),
         )
+        predictionShadow?.observe(input, dictionaryPath)
+        return candidates
     }
 
     private fun installDictionary(): File = synchronized(dictionaryInstallLock) {

@@ -9,3 +9,4 @@ publish = false
 crate-type = ["rlib", "cdylib"]
 
 [dependencies]
+jni = "=0.22.4"

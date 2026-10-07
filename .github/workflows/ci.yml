@@ -123,6 +123,16 @@ jobs:
           unzip -q ndk.zip -d "$HOME"
           echo "ANDROID_NDK_HOME=$HOME/android-ndk-${NDK_VERSION}" >> "$GITHUB_ENV"
 
+      - name: Install Rust Android build tools
+        shell: bash
+        run: |
+          set -euxo pipefail
+          rustup target add \
+            aarch64-linux-android \
+            armv7-linux-androideabi \
+            x86_64-linux-android
+          cargo install cargo-ndk --version 4.1.2 --locked
+
       - name: Resolve Swift Android SDK
         id: swift-sdk
         shell: bash
@@ -227,11 +237,17 @@ jobs:
             unzip -l "$aar" | grep -q "jni/$abi/libAzooKeyAndroidJNI.so"
             unzip -l "$aar" | grep -q "jni/$abi/libSwiftJava.so"
             unzip -l "$apk" | grep -q "lib/$abi/libAzooKeyAndroidJNI.so"
+            unzip -l "$apk" | grep -q "lib/$abi/libazookey_prediction_rust.so"
           done
 
           unzip -p "$aar" classes.jar > "$RUNNER_TEMP/converter-classes.jar"
           jar tf "$RUNNER_TEMP/converter-classes.jar" \
             | grep -qx 'dev/turboboo/azookey/converter/AzooKeyAndroidJNI.class'
+
+          rust_so="app/build/generated/rustJniLibs/x86_64/libazookey_prediction_rust.so"
+          test -f "$rust_so"
+          nm -D "$rust_so" \
+            | grep -q 'Java_dev_turboboo_azookey_ime_RustPredictionBridge_prefixWordsJson'
 
           unzip -l "$aar" | grep -q 'assets/azookey_dictionary/'
           unzip -l "$apk" | grep -q 'assets/azookey_dictionary/'

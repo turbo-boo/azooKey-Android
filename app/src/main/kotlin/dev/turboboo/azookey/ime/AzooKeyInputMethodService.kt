@@ -1,5 +1,6 @@
 package dev.turboboo.azookey.ime
 
+import android.content.pm.ApplicationInfo
 import android.inputmethodservice.InputMethodService
 import android.os.Build
 import android.os.Handler
@@ -19,8 +20,18 @@ class AzooKeyInputMethodService : InputMethodService() {
 
     override fun onCreate() {
         super.onCreate()
+        val predictionShadow = if (
+            applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
+        ) {
+            RustPredictionShadow()
+        } else {
+            null
+        }
         candidateCoordinator = CandidateCoordinator(
-            provider = SwiftCandidateProvider(this),
+            provider = SwiftCandidateProvider(
+                context = this,
+                predictionShadow = predictionShadow,
+            ),
             workerExecutor = candidateWorker,
             mainExecutor = Executor { command ->
                 mainHandler.post(command)
