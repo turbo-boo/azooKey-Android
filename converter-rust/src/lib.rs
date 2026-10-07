@@ -599,6 +599,53 @@ impl PredictionDictionary {
         Ok(clauses)
     }
 
+    pub fn rank_prediction_entries_for_seed(
+        &self,
+        seed: &PredictionSeed,
+        entries: impl IntoIterator<Item = DicdataElement>,
+        n_best: usize,
+    ) -> Result<Vec<RankedPrediction>, DictionaryError> {
+        let mut ranked = self.rank_prediction_entries(
+            entries,
+            seed.ruby.chars().count(),
+            seed.context,
+            n_best,
+        )?;
+
+        for item in &mut ranked {
+            item.word = format!("{}{}", seed.prefix_text, item.word);
+        }
+        Ok(ranked)
+    }
+
+    pub fn ranked_path_prediction_words(
+        &self,
+        data: &[DicdataElement],
+        n_best: usize,
+    ) -> Result<Vec<String>, DictionaryError> {
+        let Some(seed) = self.prediction_seed_from_path(data)? else {
+            return Ok(Vec::new());
+        };
+        let entries = self.raw_prefix_entries(&seed.ruby, false)?;
+        let ranked = self.rank_prediction_entries_for_seed(
+            &seed,
+            entries,
+            n_best,
+        )?;
+
+        let mut seen = HashSet::new();
+        Ok(ranked
+            .into_iter()
+            .filter_map(|item| {
+                if item.word.is_empty() || !seen.insert(item.word.clone()) {
+                    None
+                } else {
+                    Some(item.word)
+                }
+            })
+            .collect())
+    }
+
     pub fn rank_prediction_entries(
         &self,
         entries: impl IntoIterator<Item = DicdataElement>,
