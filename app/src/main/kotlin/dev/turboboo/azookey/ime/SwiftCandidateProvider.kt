@@ -8,8 +8,34 @@ import java.io.File
 private const val DICTIONARY_ASSET_ROOT = "azookey_dictionary"
 private const val DICTIONARY_REVISION = "4d418525b090cf49c219819d05a7e3cc2a4346eb"
 
+internal fun interface ScoredPredictionEngine {
+    fun predictions(
+        pathJson: String,
+        dictionaryPath: String,
+    ): List<ScoredCandidate>
+}
+
+internal object AndroidRustScoredPredictionEngine : ScoredPredictionEngine {
+    override fun predictions(
+        pathJson: String,
+        dictionaryPath: String,
+    ): List<ScoredCandidate> {
+        if (pathJson == "[]") {
+            return emptyList()
+        }
+        return parseScoredPredictionJson(
+            RustPredictionBridge.prefixScoredFromPathJson(
+                pathJson,
+                dictionaryPath,
+                3,
+            ),
+        )
+    }
+}
+
 internal class SwiftCandidateProvider(
     context: Context,
+    private val predictionEngine: ScoredPredictionEngine = AndroidRustScoredPredictionEngine,
     private val predictionShadow: PredictionShadow? = null,
 ) : CandidateProvider {
     private val appContext = context.applicationContext
@@ -23,12 +49,35 @@ internal class SwiftCandidateProvider(
         }
 
         val dictionaryPath = dictionaryDirectory.absolutePath
-        val candidates = parseCandidateJson(
-            AzooKeyAndroidJNI.candidatesJSON(
+        val bridge = parseConversionBridgeJson(
+            AzooKeyAndroidJNI.conversionBridgeJSON(
                 input,
                 dictionaryPath,
             ),
         )
+
+        val rustPredictions = runCatching {
+            predictionEngine.predictions(
+                pathJson = bridge.pathJson,
+                dictionaryPath = dictionaryPath,
+            )
+        }.getOrDefault(emptyList())
+
+        val candidates = if (bridge.candidates.isNotEmpty()) {
+            mergeHybridCandidates(
+                swiftCandidates = bridge.candidates,
+                rustPredictions = rustPredictions,
+            )
+        } else {
+            // Fail safe for a bridge-format or native-loading regression.
+            parseCandidateJson(
+                AzooKeyAndroidJNI.candidatesJSON(
+                    input,
+                    dictionaryPath,
+                ),
+            )
+        }
+
         predictionShadow?.let { shadow ->
             val diagnostics = parsePredictionShadowJson(
                 AzooKeyAndroidJNI.predictionShadowJSON(
