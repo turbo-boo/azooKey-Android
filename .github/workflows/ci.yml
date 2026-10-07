@@ -115,39 +115,8 @@ jobs:
               --bin prediction_path_scored_oracle -- \
               "$dictionary_path" "$path_json" 3)"
 
-            python3 -c '
-import json, sys
-input_text, auto_raw, bridge_raw, rust_raw = sys.argv[1:5]
-auto = json.loads(auto_raw)[:5]
-bridge = json.loads(bridge_raw)
-base = bridge["candidates"]
-pred = json.loads(rust_raw)
-
-combined = []
-positions = {}
-for item in base[:5] + [{"text": p["word"], "value": p["score"], "exactRuby": False} for p in pred]:
-    text = item["text"]
-    if not text:
-        continue
-    if text in positions:
-        idx = positions[text]
-        if combined[idx]["value"] < item["value"]:
-            combined[idx] = item
-    else:
-        positions[text] = len(combined)
-        combined.append(item)
-
-combined = sorted(combined, key=lambda item: item["value"], reverse=True)[:5]
-if not any(item.get("exactRuby", False) for item in combined[:3]):
-    exact = next((item for item in base if item.get("exactRuby", False)), None)
-    if exact is not None:
-        combined = [item for item in combined if item["text"] != exact["text"]]
-        combined.insert(min(2, len(combined)), exact)
-        combined = combined[:5]
-
-actual = [item["text"] for item in combined]
-assert actual == auto, f"production merge parity mismatch for {input_text!r}: swift={auto!r} rust-mix={actual!r}"
-' "$input" "$auto_mix_json" "$bridge_json" "$rust_scored_json"
+            python3 scripts/check_prediction_merge.py \
+              "$input" "$auto_mix_json" "$bridge_json" "$rust_scored_json"
           done
 
           for input in "わたしは"; do
