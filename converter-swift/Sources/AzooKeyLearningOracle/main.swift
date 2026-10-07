@@ -2,7 +2,7 @@ import AzooKeyAndroidConverter
 import Foundation
 
 guard CommandLine.arguments.count >= 3 else {
-    fputs("usage: AzooKeyLearningOracle <input> <candidate>\n", stderr)
+    print("usage: AzooKeyLearningOracle <input> <candidate>")
     exit(64)
 }
 
