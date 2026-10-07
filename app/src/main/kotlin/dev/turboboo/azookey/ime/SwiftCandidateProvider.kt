@@ -4,7 +4,6 @@ import android.content.Context
 import android.content.res.AssetManager
 import dev.turboboo.azookey.converter.AzooKeyAndroidJNI
 import java.io.File
-import org.json.JSONArray
 
 private const val DICTIONARY_ASSET_ROOT = "azookey_dictionary"
 private const val DICTIONARY_REVISION = "4d418525b090cf49c219819d05a7e3cc2a4346eb"
@@ -115,17 +114,112 @@ internal class SwiftCandidateProvider(
 
 internal fun parseCandidateJson(json: String): List<String> =
     runCatching {
-        val array = JSONArray(json)
-        buildList {
-            val seen = mutableSetOf<String>()
-            for (index in 0 until array.length()) {
-                val candidate = array.optString(index, "")
-                if (candidate.isNotBlank() && seen.add(candidate)) {
-                    add(candidate)
+        JsonStringArrayParser(json).parse()
+            .filter(String::isNotBlank)
+            .distinct()
+    }.getOrDefault(emptyList())
+
+private class JsonStringArrayParser(
+    private val source: String,
+) {
+    private var index = 0
+
+    fun parse(): List<String> {
+        skipWhitespace()
+        expect('[')
+        skipWhitespace()
+        if (peek() == ']') {
+            index += 1
+            finish()
+            return emptyList()
+        }
+
+        val result = mutableListOf<String>()
+        while (true) {
+            skipWhitespace()
+            result += parseString()
+            skipWhitespace()
+
+            when (peek()) {
+                ',' -> index += 1
+                ']' -> {
+                    index += 1
+                    finish()
+                    return result
+                }
+                else -> error("Expected ',' or ']' in JSON string array")
+            }
+        }
+    }
+
+    private fun parseString(): String {
+        expect('"')
+        val result = StringBuilder()
+        while (index < source.length) {
+            val character = source[index++]
+            when (character) {
+                '"' -> return result.toString()
+                '\\' -> result.append(parseEscape())
+                else -> {
+                    require(character >= ' ') {
+                        "Unescaped control character in JSON string"
+                    }
+                    result.append(character)
                 }
             }
         }
-    }.getOrDefault(emptyList())
+        error("Unterminated JSON string")
+    }
+
+    private fun parseEscape(): Char {
+        require(index < source.length) {
+            "Unterminated JSON escape"
+        }
+        return when (val escaped = source[index++]) {
+            '"' -> '"'
+            '\\' -> '\\'
+            '/' -> '/'
+            'b' -> '\b'
+            'f' -> '\u000C'
+            'n' -> '\n'
+            'r' -> '\r'
+            't' -> '\t'
+            'u' -> parseUnicodeEscape()
+            else -> error("Unsupported JSON escape: \\$escaped")
+        }
+    }
+
+    private fun parseUnicodeEscape(): Char {
+        require(index + 4 <= source.length) {
+            "Truncated JSON unicode escape"
+        }
+        val value = source.substring(index, index + 4).toInt(16)
+        index += 4
+        return value.toChar()
+    }
+
+    private fun expect(expected: Char) {
+        require(peek() == expected) {
+            "Expected '$expected' in JSON string array"
+        }
+        index += 1
+    }
+
+    private fun peek(): Char? = source.getOrNull(index)
+
+    private fun skipWhitespace() {
+        while (source.getOrNull(index)?.isWhitespace() == true) {
+            index += 1
+        }
+    }
+
+    private fun finish() {
+        skipWhitespace()
+        require(index == source.length) {
+            "Trailing data after JSON string array"
+        }
+    }
+}
 
 
 internal data class PredictionShadowDiagnostics(
