@@ -5,7 +5,7 @@ plugins {
 val rustJniLibsDir = layout.buildDirectory.dir("generated/rustJniLibs")
 val rustTargetDir = layout.buildDirectory.dir("rust-target")
 
-val buildRustPrediction by tasks.registering(org.gradle.api.tasks.Exec::class) {
+val buildRustPrediction = tasks.register<org.gradle.api.tasks.Exec>("buildRustPrediction") {
     group = "build"
     description = "Builds the Rust prediction JNI library for Android."
 
@@ -63,7 +63,7 @@ android {
     }
 
     sourceSets {
-        getByName("main").jniLibs.srcDir(rustJniLibsDir)
+        getByName("main").jniLibs.srcDir(rustJniLibsDir.get().asFile)
     }
 }
 
