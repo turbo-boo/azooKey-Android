@@ -25,6 +25,7 @@ use std::io;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
+use std::time::SystemTime;
 
 const SHARD_SHIFT: usize = 11;
 const LOCAL_MASK: usize = (1 << SHARD_SHIFT) - 1;
@@ -483,6 +484,26 @@ struct CcLine {
     overrides: HashMap<u16, f32>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct FileStamp {
+    len: u64,
+    modified: Option<SystemTime>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct MemoryStamp {
+    louds: FileStamp,
+    chars: FileStamp,
+    metadata: Option<FileStamp>,
+}
+
+#[derive(Debug)]
+struct MemoryDictionaryCache {
+    stamp: MemoryStamp,
+    louds: Arc<Louds>,
+    shards: HashMap<usize, Arc<Vec<u8>>>,
+}
+
 pub struct PredictionDictionary {
     root: PathBuf,
     char_ids: HashMap<char, u8>,
@@ -491,6 +512,7 @@ pub struct PredictionDictionary {
     cc_cache: Mutex<HashMap<u16, Option<Arc<CcLine>>>>,
     mm_cache: Mutex<Option<Arc<Vec<f32>>>>,
     dynamic_user_dictionary: Mutex<Vec<DicdataElement>>,
+    memory_cache: Mutex<Option<MemoryDictionaryCache>>,
 }
 
 static PREDICTION_DICTIONARY_CACHE: OnceLock<
@@ -523,6 +545,7 @@ impl PredictionDictionary {
             cc_cache: Mutex::new(HashMap::new()),
             mm_cache: Mutex::new(None),
             dynamic_user_dictionary: Mutex::new(Vec::new()),
+            memory_cache: Mutex::new(None),
         })
     }
 
@@ -706,7 +729,7 @@ impl PredictionDictionary {
         let ignore_cc_value = self.cc_value(context.last_rcid, context.next_lcid)?;
         let mut result: Vec<RankedPrediction> = Vec::with_capacity(n_best);
 
-        for data in entries.into_iter().filter(|data| prediction_usable(data.rcid)) {
+        for data in entries {
             let mm_value = if include_mm_value_calculation(&data) {
                 self.mm_value(context.last_mid, data.mid)?
             } else {
@@ -788,9 +811,17 @@ impl PredictionDictionary {
             indices.sort_unstable();
             indices.dedup();
             self.read_loudstxt3_entries(&identifier, &indices)?
+                .into_iter()
+                .filter(|entry| prediction_usable(entry.rcid))
+                .collect()
         } else {
             Vec::new()
         };
+
+        result.extend(self.read_memory_prefix_entries(
+            &char_ids,
+            include_exact_match,
+        )?);
 
         let dynamic_entries = self
             .dynamic_user_dictionary
@@ -801,6 +832,93 @@ impl PredictionDictionary {
             .cloned()
             .collect::<Vec<_>>();
         result.extend(dynamic_entries);
+        Ok(result)
+    }
+
+    fn read_memory_prefix_entries(
+        &self,
+        char_ids: &[u8],
+        include_exact_match: bool,
+    ) -> Result<Vec<DicdataElement>, DictionaryError> {
+        if char_ids.is_empty() || char_ids.contains(&u8::MAX) {
+            return Ok(Vec::new());
+        }
+
+        let memory_root = learning_memory_directory(&self.root);
+        if memory_root.join(".pause").exists() {
+            return Ok(Vec::new());
+        }
+
+        let louds_path = memory_root.join("memory.louds");
+        let chars_path = memory_root.join("memory.loudschars2");
+        let Ok(stamp) = memory_stamp(&memory_root) else {
+            return Ok(Vec::new());
+        };
+
+        let mut cache = self
+            .memory_cache
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+
+        let must_reload = cache
+            .as_ref()
+            .map(|cached| cached.stamp != stamp)
+            .unwrap_or(true);
+        if must_reload {
+            let louds = match Louds::from_files(&louds_path, &chars_path) {
+                Ok(louds) => Arc::new(louds),
+                Err(DictionaryError::Io(error)) if error.kind() == io::ErrorKind::NotFound => {
+                    *cache = None;
+                    return Ok(Vec::new());
+                }
+                Err(error) => return Err(error),
+            };
+            *cache = Some(MemoryDictionaryCache {
+                stamp,
+                louds,
+                shards: HashMap::new(),
+            });
+        }
+
+        let cached = cache
+            .as_mut()
+            .expect("memory cache exists after successful reload");
+        let mut indices = cached
+            .louds
+            .prefix_node_indices(char_ids, usize::MAX, PREDICTION_MAX_COUNT);
+        if include_exact_match && indices.len() < PREDICTION_MAX_COUNT {
+            if let Some(exact_index) = cached.louds.search_node_index(char_ids) {
+                indices.push(exact_index);
+            }
+        }
+        indices.sort_unstable();
+        indices.dedup();
+
+        let mut grouped_indices: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
+        for index in indices {
+            grouped_indices
+                .entry(index >> SHARD_SHIFT)
+                .or_default()
+                .push(index & LOCAL_MASK);
+        }
+
+        let mut result = Vec::new();
+        for (shard, local_indices) in grouped_indices {
+            let bytes = if let Some(bytes) = cached.shards.get(&shard).cloned() {
+                bytes
+            } else {
+                let path = memory_root.join(format!("memory{shard}.loudstxt3"));
+                let bytes = match fs::read(path) {
+                    Ok(bytes) => Arc::new(bytes),
+                    Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
+                    Err(error) => return Err(error.into()),
+                };
+                cached.shards.insert(shard, bytes.clone());
+                bytes
+            };
+            result.extend(parse_loudstxt3(bytes.as_slice(), &local_indices)?);
+        }
+
         Ok(result)
     }
 
@@ -1103,6 +1221,29 @@ fn include_mm_value_calculation(data: &DicdataElement) -> bool {
     word_type(data.lcid) == 1 || word_type(data.rcid) == 1
 }
 
+fn learning_memory_directory(dictionary_root: &Path) -> PathBuf {
+    dictionary_root
+        .parent()
+        .unwrap_or(dictionary_root)
+        .join("learning-memory")
+}
+
+fn file_stamp(path: &Path) -> io::Result<FileStamp> {
+    let metadata = fs::metadata(path)?;
+    Ok(FileStamp {
+        len: metadata.len(),
+        modified: metadata.modified().ok(),
+    })
+}
+
+fn memory_stamp(memory_root: &Path) -> io::Result<MemoryStamp> {
+    Ok(MemoryStamp {
+        louds: file_stamp(&memory_root.join("memory.louds"))?,
+        chars: file_stamp(&memory_root.join("memory.loudschars2"))?,
+        metadata: file_stamp(&memory_root.join("memory.memorymetadata")).ok(),
+    })
+}
+
 fn prediction_usable(rcid: u16) -> bool {
     PREDICTION_UNUSABLE_RCIDS.binary_search(&rcid).is_err()
 }
@@ -1201,7 +1342,6 @@ pub fn raw_prefix_words(
     let mut seen = HashSet::new();
     Ok(entries
         .into_iter()
-        .filter(|entry| prediction_usable(entry.rcid))
         .filter_map(|entry| {
             if entry.word.is_empty() || !seen.insert(entry.word.clone()) {
                 None
@@ -2025,14 +2165,6 @@ mod tests {
                 mid: 1,
                 value: -1.0,
             },
-            DicdataElement {
-                word: "blocked".to_owned(),
-                ruby: "アイウ".to_owned(),
-                lcid: 7,
-                rcid: 33,
-                mid: 1,
-                value: 100.0,
-            },
         ];
 
         let ranked = dictionary
@@ -2169,6 +2301,11 @@ mod tests {
     }
 
     fn fixture_louds(paths: &[&[u8]]) -> Louds {
+        let (bits, node_ids) = fixture_louds_parts(paths);
+        Louds::from_parts(bits, node_ids).unwrap()
+    }
+
+    fn fixture_louds_parts(paths: &[&[u8]]) -> (Vec<u64>, Vec<u8>) {
         let mut root = Node::default();
         for path in paths {
             insert(&mut root, path);
@@ -2193,7 +2330,58 @@ mod tests {
             current = next;
         }
 
-        Louds::from_parts(pack_bits(&bits), node_ids).unwrap()
+        (pack_bits(&bits), node_ids)
+    }
+
+    fn write_memory_fixture(
+        memory_root: &Path,
+        path: &[u8],
+        entry: DicdataElement,
+    ) {
+        let (bits, node_ids) = fixture_louds_parts(&[path]);
+        let louds = Louds::from_parts(bits.clone(), node_ids.clone()).unwrap();
+        let target_index = louds.search_node_index(path).unwrap();
+
+        let mut louds_bytes = Vec::new();
+        for word in bits {
+            louds_bytes.extend_from_slice(&word.to_le_bytes());
+        }
+        fs::write(memory_root.join("memory.louds"), louds_bytes).unwrap();
+        fs::write(memory_root.join("memory.loudschars2"), node_ids).unwrap();
+
+        let slot_count = target_index + 1;
+        let mut payloads = Vec::with_capacity(slot_count);
+        for index in 0..slot_count {
+            if index == target_index {
+                let mut payload = Vec::new();
+                payload.extend_from_slice(&1u16.to_le_bytes());
+                payload.extend_from_slice(&entry.lcid.to_le_bytes());
+                payload.extend_from_slice(&entry.rcid.to_le_bytes());
+                payload.extend_from_slice(&entry.mid.to_le_bytes());
+                payload.extend_from_slice(&entry.value.to_bits().to_le_bytes());
+                payload.extend_from_slice(entry.ruby.as_bytes());
+                payload.push(b'\t');
+                if entry.word != entry.ruby {
+                    payload.extend_from_slice(entry.word.as_bytes());
+                }
+                payloads.push(payload);
+            } else {
+                payloads.push(0u16.to_le_bytes().to_vec());
+            }
+        }
+
+        let header_size = 2 + slot_count * 4;
+        let mut offset = header_size as u32;
+        let mut shard = Vec::new();
+        shard.extend_from_slice(&(slot_count as u16).to_le_bytes());
+        for payload in &payloads {
+            shard.extend_from_slice(&offset.to_le_bytes());
+            offset += payload.len() as u32;
+        }
+        for payload in payloads {
+            shard.extend_from_slice(&payload);
+        }
+        fs::write(memory_root.join("memory0.loudstxt3"), shard).unwrap();
     }
 
     fn insert(node: &mut Node, path: &[u8]) {
