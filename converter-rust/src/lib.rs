@@ -543,7 +543,7 @@ fn parse_loudstxt3_payload(
 
     let text = std::str::from_utf8(&payload[text_offset..])
         .map_err(|_| DictionaryError::InvalidFormat("loudstxt3 text is not UTF-8"))?;
-    let fields: Vec<&str> = text.split('\\t').collect();
+    let fields: Vec<&str> = text.split('\t').collect();
     if fields.len() < count + 1 {
         return Err(DictionaryError::InvalidFormat(
             "loudstxt3 text field count does not match row count",
