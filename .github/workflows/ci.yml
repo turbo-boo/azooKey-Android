@@ -119,6 +119,21 @@ jobs:
               "$input" "$auto_mix_json" "$bridge_json" "$rust_scored_json"
           done
 
+          sequence_output="$(swift run --package-path converter-swift AzooKeyPredictionOracle "あ" "あさ" "あさっ" 2>&1)"
+          sequence_json="$(printf '%s\n' "$sequence_output" \
+            | sed -n 's/^AZOOKEY_SEQUENTIAL_PARITY_JSON=//p' \
+            | tail -n 1)"
+          test -n "$sequence_json"
+
+          sequence_paths_json="$(python3 -c 'import json,sys; print(json.dumps([row["bridge"]["path"] for row in json.loads(sys.argv[1])], ensure_ascii=False, separators=(",",":")))' "$sequence_json")"
+          rust_sequence_json="$(cargo run --quiet \
+            --manifest-path converter-rust/Cargo.toml \
+            --bin prediction_path_scored_sequence_oracle -- \
+            "$dictionary_path" "$sequence_paths_json" 3)"
+
+          python3 scripts/check_stable_prediction_sequence.py \
+            "$sequence_json" "$rust_sequence_json"
+
           for input in "わたしは"; do
             swift_output="$(swift run --package-path converter-swift AzooKeyPredictionOracle "$input" 2>&1)"
             diagnostics_json="$(printf '%s\n' "$swift_output" \

@@ -10,3 +10,9 @@ let autoMix = AzooKeyAndroidConverter.candidatesJSON(input)
 let conversionBridge = AzooKeyAndroidConverter.conversionBridgeJSON(input)
 print("AZOOKEY_AUTO_MIX_JSON=\(autoMix)")
 print("AZOOKEY_CONVERSION_BRIDGE_JSON=\(conversionBridge)")
+
+let sequenceInputs = Array(CommandLine.arguments.dropFirst())
+if sequenceInputs.count > 1 {
+    let sequence = AzooKeyAndroidConverter.sequentialPredictionParityJSON(sequenceInputs)
+    print("AZOOKEY_SEQUENTIAL_PARITY_JSON=\(sequence)")
+}

@@ -156,6 +156,107 @@ public enum AzooKeyAndroidConverter {
         return String(decoding: encoded, as: UTF8.self)
     }
 
+    public static func sequentialPredictionParityJSON(_ inputs: [String]) -> String {
+        guard !inputs.isEmpty else {
+            return "[]"
+        }
+
+        let autoMixStorage = ConverterStorage()
+        let bridgeStorage = ConverterStorage()
+
+        let rows = inputs.map { input -> SequentialPredictionParityWire in
+            var autoText = ComposingText()
+            autoText.insertAtCursorPosition(input, inputStyle: .direct)
+            let autoMix = autoMixStorage.withConverter { converter in
+                let result = converter.requestCandidates(
+                    autoText,
+                    options: ConvertRequestOptions(
+                        N_best: 10,
+                        requireJapanesePrediction: .autoMix,
+                        requireEnglishPrediction: .disabled,
+                        keyboardLanguage: .ja_JP,
+                        englishCandidateInRoman2KanaInput: false,
+                        fullWidthRomanCandidate: false,
+                        halfWidthKanaCandidate: false,
+                        learningType: .nothing,
+                        maxMemoryCount: 0,
+                        shouldResetMemory: false,
+                        memoryDirectoryURL: autoMixStorage.workingDirectory,
+                        sharedContainerURL: autoMixStorage.workingDirectory,
+                        textReplacer: .empty,
+                        specialCandidateProviders: nil,
+                        metadata: .init(versionString: "azooKey-Android")
+                    )
+                )
+                return Array(result.mainResults.prefix(5).map(\.text))
+            }
+
+            var bridgeText = ComposingText()
+            bridgeText.insertAtCursorPosition(input, inputStyle: .direct)
+            let bridge = bridgeStorage.withConverter { converter in
+                let result = converter.requestCandidates(
+                    bridgeText,
+                    options: ConvertRequestOptions(
+                        N_best: 10,
+                        requireJapanesePrediction: .disabled,
+                        requireEnglishPrediction: .disabled,
+                        keyboardLanguage: .ja_JP,
+                        englishCandidateInRoman2KanaInput: false,
+                        fullWidthRomanCandidate: false,
+                        halfWidthKanaCandidate: false,
+                        learningType: .nothing,
+                        maxMemoryCount: 0,
+                        shouldResetMemory: false,
+                        memoryDirectoryURL: bridgeStorage.workingDirectory,
+                        sharedContainerURL: bridgeStorage.workingDirectory,
+                        textReplacer: .empty,
+                        specialCandidateProviders: nil,
+                        metadata: .init(versionString: "azooKey-Android")
+                    )
+                )
+
+                let targetRuby = dictionaryReading(input)
+                let pathCandidate = result.mainResults.first {
+                    !$0.data.isEmpty && $0.data.map(\.ruby).joined() == targetRuby
+                } ?? result.mainResults.first {
+                    !$0.data.isEmpty
+                }
+                let candidates = Array(result.mainResults.prefix(10)).map {
+                    ScoredCandidateWire(
+                        text: $0.text,
+                        value: Float($0.value),
+                        exactRuby: !$0.data.isEmpty && $0.data.map(\.ruby).joined() == targetRuby
+                    )
+                }
+                let path = pathCandidate?.data.map {
+                    PredictionPathElementWire(
+                        word: $0.word,
+                        ruby: $0.ruby,
+                        lcid: $0.lcid,
+                        rcid: $0.rcid,
+                        mid: $0.mid,
+                        value: Float($0.value())
+                    )
+                } ?? []
+                return ConversionBridgeWire(
+                    candidates: candidates,
+                    path: path
+                )
+            }
+
+            return SequentialPredictionParityWire(
+                input: input,
+                autoMix: autoMix,
+                bridge: bridge
+            )
+        }
+
+        guard let encoded = try? JSONEncoder().encode(rows) else {
+            return "[]"
+        }
+        return String(decoding: encoded, as: UTF8.self)
+    }
+
     public static func predictionDiagnosticsJSON(_ input: String) -> String {
         guard !input.isEmpty else {
             return #"{"predictions":[],"path":[]}"#
@@ -245,6 +346,12 @@ private final class ConverterStorage: @unchecked Sendable {
     }
 }
 
+
+private struct SequentialPredictionParityWire: Encodable {
+    let input: String
+    let autoMix: [String]
+    let bridge: ConversionBridgeWire
+}
 
 private struct ScoredCandidateWire: Encodable {
     let text: String
