@@ -548,7 +548,7 @@ impl PredictionDictionary {
             return Ok(Vec::new());
         }
 
-        let mut clauses = Vec::new();
+        let mut clauses: Vec<ReconstructedClause> = Vec::new();
         let mut previous_rcid = 0u16;
         let mut total_value = 0.0f32;
 
