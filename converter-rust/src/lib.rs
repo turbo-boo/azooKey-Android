@@ -27,6 +27,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 const SHARD_SHIFT: usize = 11;
 const LOCAL_MASK: usize = (1 << SHARD_SHIFT) - 1;
 const PREDICTION_MAX_COUNT: usize = 700;
+const MID_COUNT: usize = 502;
 const PREDICTION_UNUSABLE_RCIDS: &[u16] = &[
     13, 14, 15, 16, 17, 18, 25, 26, 27, 28, 33, 34, 40, 41, 42, 46, 47, 50,
     56, 57, 58, 59, 60, 61, 62, 63, 64, 74, 75, 76, 77, 78, 79, 86, 87, 88,
@@ -409,6 +410,7 @@ pub struct PredictionDictionary {
     louds_cache: Mutex<HashMap<String, Arc<Louds>>>,
     loudstxt3_cache: Mutex<HashMap<String, Arc<Vec<u8>>>>,
     cc_cache: Mutex<HashMap<u16, Option<Arc<CcLine>>>>,
+    mm_cache: Mutex<Option<Arc<Vec<f32>>>>,
 }
 
 static PREDICTION_DICTIONARY_CACHE: OnceLock<
@@ -439,6 +441,7 @@ impl PredictionDictionary {
             louds_cache: Mutex::new(HashMap::new()),
             loudstxt3_cache: Mutex::new(HashMap::new()),
             cc_cache: Mutex::new(HashMap::new()),
+            mm_cache: Mutex::new(None),
         })
     }
 
@@ -614,6 +617,70 @@ impl PredictionDictionary {
                 .expect("new CC cache entry contains a line")
                 .clone(),
         ))
+    }
+
+    pub fn mm_value(
+        &self,
+        former: u16,
+        latter: u16,
+    ) -> Result<f32, DictionaryError> {
+        if former == 500 || latter == 500 {
+            return Ok(0.0);
+        }
+        let former = usize::from(former);
+        let latter = usize::from(latter);
+        if former >= MID_COUNT || latter >= MID_COUNT {
+            return Err(DictionaryError::InvalidFormat(
+                "MM lookup contains an out-of-range meaning id",
+            ));
+        }
+
+        let values = self.load_mm_values()?;
+        Ok(values[former * MID_COUNT + latter])
+    }
+
+    fn load_mm_values(&self) -> Result<Arc<Vec<f32>>, DictionaryError> {
+        if let Some(cached) = self
+            .mm_cache
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone()
+        {
+            return Ok(cached);
+        }
+
+        let expected_count = MID_COUNT * MID_COUNT;
+        let path = self.root.join("mm.binary");
+        let loaded = match fs::read(path) {
+            Ok(bytes) => {
+                if bytes.len() != expected_count * 4 {
+                    return Err(DictionaryError::InvalidFormat(
+                        "mm.binary must contain a 502 by 502 Float32 matrix",
+                    ));
+                }
+
+                let mut values = Vec::with_capacity(expected_count);
+                for chunk in bytes.chunks_exact(4) {
+                    let bits = u32::from_le_bytes(
+                        chunk
+                            .try_into()
+                            .expect("chunks_exact(4) always yields four bytes"),
+                    );
+                    values.push(f32::from_bits(bits));
+                }
+                Arc::new(values)
+            }
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                Arc::new(vec![0.0; expected_count])
+            }
+            Err(error) => return Err(error.into()),
+        };
+
+        let mut cache = self
+            .mm_cache
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        Ok(cache.get_or_insert_with(|| loaded.clone()).clone())
     }
 
     fn read_loudstxt3_entries(
