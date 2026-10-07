@@ -42,6 +42,59 @@ public enum AzooKeyAndroidConverter {
         return true
     }
 
+    public static func learnCandidate(
+        input: String,
+        candidateText: String
+    ) -> Bool {
+        guard !input.isEmpty, !candidateText.isEmpty else {
+            return false
+        }
+
+        var composingText = ComposingText()
+        composingText.insertAtCursorPosition(input, inputStyle: .direct)
+
+        return storage.withConverter { converter in
+            let result = converter.requestCandidates(
+                composingText,
+                options: ConvertRequestOptions(
+                N_best: 10,
+                requireJapanesePrediction: .manualMix,
+                requireEnglishPrediction: .disabled,
+                keyboardLanguage: .ja_JP,
+                englishCandidateInRoman2KanaInput: false,
+                fullWidthRomanCandidate: false,
+                halfWidthKanaCandidate: false,
+                learningType: .inputAndOutput,
+                maxMemoryCount: 65536,
+                shouldResetMemory: false,
+                memoryDirectoryURL: storage.workingDirectory,
+                sharedContainerURL: storage.workingDirectory,
+                textReplacer: .empty,
+                specialCandidateProviders: nil,
+                metadata: .init(versionString: "azooKey-Android")
+            )
+            )
+            guard let candidate = (result.mainResults + result.predictionResults)
+                .first(where: { $0.text == candidateText })
+            else {
+                return false
+            }
+
+            converter.setCompletedData(candidate)
+            converter.updateLearningData(candidate)
+            converter.commitUpdateLearningData()
+            converter.stopComposition()
+            return true
+        }
+    }
+
+    public static func resetLearningMemory() {
+        storage.withConverter { converter in
+            converter.resetMemory()
+            converter.stopComposition()
+        }
+    }
+
     public static func predictionCandidatesJSON(_ input: String) -> String {
         guard !input.isEmpty else {
             return "[]"

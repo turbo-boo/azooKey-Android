@@ -60,6 +60,7 @@ internal class SwiftCandidateProvider(
             swiftApplied && rustApplied
         },
     )
+    private var lastInput: String = ""
     private val dictionaryDirectory: File by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         installDictionary()
     }
@@ -70,6 +71,7 @@ internal class SwiftCandidateProvider(
             return emptyList()
         }
 
+        lastInput = input
         val dictionaryPath = dictionaryDirectory.absolutePath
         if (!userDictionarySynchronizer.sync(dictionaryPath)) {
             stablePredictionCache.clear()
@@ -141,7 +143,25 @@ internal class SwiftCandidateProvider(
         return candidates
     }
 
+    override fun complete(candidate: String) {
+        val input = lastInput
+        if (input.isEmpty() || candidate.isEmpty()) {
+            return
+        }
+
+        val dictionaryPath = dictionaryDirectory.absolutePath
+        runCatching {
+            AzooKeyAndroidJNI.learnCandidate(
+                input,
+                candidate,
+                dictionaryPath,
+            )
+        }
+        stablePredictionCache.clear()
+    }
+
     override fun reset() {
+        lastInput = ""
         stablePredictionCache.clear()
     }
 

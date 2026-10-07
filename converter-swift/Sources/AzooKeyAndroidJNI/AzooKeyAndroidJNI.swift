@@ -161,6 +161,71 @@ public func replaceUserDictionaryJSON(
     }
 }
 
+public func learnCandidate(
+    _ input: String,
+    _ candidateText: String,
+    _ dictionaryPath: String
+) -> Bool {
+    guard !input.isEmpty, !candidateText.isEmpty, !dictionaryPath.isEmpty else {
+        return false
+    }
+
+    return AndroidConverterStorage.shared.withConverter(
+        dictionaryPath: dictionaryPath
+    ) { converter, workingDirectory in
+        var composingText = ComposingText()
+        composingText.insertAtCursorPosition(input, inputStyle: .direct)
+
+        let result = converter.requestCandidates(
+            composingText,
+            options: ConvertRequestOptions(
+                N_best: 10,
+                requireJapanesePrediction: .manualMix,
+                requireEnglishPrediction: .disabled,
+                keyboardLanguage: .ja_JP,
+                englishCandidateInRoman2KanaInput: false,
+                fullWidthRomanCandidate: false,
+                halfWidthKanaCandidate: false,
+                learningType: .inputAndOutput,
+                maxMemoryCount: 65536,
+                shouldResetMemory: false,
+                memoryDirectoryURL: workingDirectory,
+                sharedContainerURL: workingDirectory,
+                textReplacer: .empty,
+                specialCandidateProviders: nil,
+                metadata: .init(versionString: "azooKey-Android")
+            )
+        )
+        guard let candidate = (result.mainResults + result.predictionResults)
+            .first(where: { $0.text == candidateText })
+        else {
+            return false
+        }
+
+        converter.setCompletedData(candidate)
+        converter.updateLearningData(candidate)
+        converter.commitUpdateLearningData()
+        converter.stopComposition()
+        return true
+    }
+}
+
+public func resetLearningMemory(
+    _ dictionaryPath: String
+) -> Bool {
+    guard !dictionaryPath.isEmpty else {
+        return false
+    }
+
+    return AndroidConverterStorage.shared.withConverter(
+        dictionaryPath: dictionaryPath
+    ) { converter, _ in
+        converter.resetMemory()
+        converter.stopComposition()
+        return true
+    }
+}
+
 public func predictionCandidatesJSON(
     _ input: String,
     _ dictionaryPath: String
@@ -315,16 +380,7 @@ private final class AndroidConverterStorage: @unchecked Sendable {
     private let lock = NSLock()
     private var dictionaryPath: String?
     private var converter: KanaKanjiConverter?
-
-    private let workingDirectory: URL = {
-        let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("azookey-android-converter-jni", isDirectory: true)
-        try? FileManager.default.createDirectory(
-            at: directory,
-            withIntermediateDirectories: true
-        )
-        return directory
-    }()
+    private var workingDirectory: URL?
 
     func withConverter<T>(
         dictionaryPath: String,
@@ -334,16 +390,26 @@ private final class AndroidConverterStorage: @unchecked Sendable {
         defer { lock.unlock() }
 
         if converter == nil || self.dictionaryPath != dictionaryPath {
+            let dictionaryURL = URL(
+                fileURLWithPath: dictionaryPath,
+                isDirectory: true
+            )
+            let stateDirectory = dictionaryURL
+                .deletingLastPathComponent()
+                .appendingPathComponent("learning-memory", isDirectory: true)
+            try? FileManager.default.createDirectory(
+                at: stateDirectory,
+                withIntermediateDirectories: true
+            )
+
             converter = KanaKanjiConverter(
-                dictionaryURL: URL(
-                    fileURLWithPath: dictionaryPath,
-                    isDirectory: true
-                ),
+                dictionaryURL: dictionaryURL,
                 preloadDictionary: true
             )
             self.dictionaryPath = dictionaryPath
+            self.workingDirectory = stateDirectory
         }
 
-        return operation(converter!, workingDirectory)
+        return operation(converter!, workingDirectory!)
     }
 }

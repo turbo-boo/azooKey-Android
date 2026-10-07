@@ -69,6 +69,7 @@ class AzooKeyInputMethodService : InputMethodService() {
 
                 override fun onCandidate(text: String) {
                     withEditorConnection { connection ->
+                        candidateCoordinator.complete(text)
                         controller.selectCandidate(text, connection)
                         candidateCoordinator.clear()
                     }

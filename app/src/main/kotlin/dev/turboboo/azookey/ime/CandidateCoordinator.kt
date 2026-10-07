@@ -6,6 +6,8 @@ import java.util.concurrent.atomic.AtomicLong
 fun interface CandidateProvider {
     fun candidates(input: String): List<String>
 
+    fun complete(candidate: String) {}
+
     fun reset() {}
 }
 
@@ -34,6 +36,14 @@ class CandidateCoordinator(
             }.getOrDefault(emptyList())
 
             publishIfCurrent(requestGeneration, candidates)
+        }
+    }
+
+    fun complete(candidate: String) {
+        workerExecutor.execute {
+            runCatching {
+                provider.complete(candidate)
+            }
         }
     }
 
