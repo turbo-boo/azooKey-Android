@@ -109,6 +109,31 @@ pub struct DicdataElement {
     pub value: f32,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PredictionContext {
+    pub last_rcid: u16,
+    pub next_lcid: u16,
+    pub last_mid: u16,
+    pub last_value: f32,
+}
+
+impl Default for PredictionContext {
+    fn default() -> Self {
+        Self {
+            last_rcid: 0,
+            next_lcid: 0,
+            last_mid: 500,
+            last_value: 0.0,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RankedPrediction {
+    pub word: String,
+    pub score: f32,
+}
+
 #[derive(Debug)]
 pub struct Louds {
     bits: Vec<u64>,
@@ -445,6 +470,62 @@ impl PredictionDictionary {
         })
     }
 
+    pub fn rank_prediction_entries(
+        &self,
+        entries: impl IntoIterator<Item = DicdataElement>,
+        last_ruby_count: usize,
+        context: PredictionContext,
+        n_best: usize,
+    ) -> Result<Vec<RankedPrediction>, DictionaryError> {
+        if n_best == 0 {
+            return Ok(Vec::new());
+        }
+
+        let ignore_cc_value = self.cc_value(context.last_rcid, context.next_lcid)?;
+        let mut result: Vec<RankedPrediction> = Vec::with_capacity(n_best);
+
+        for data in entries.into_iter().filter(|data| prediction_usable(data.rcid)) {
+            let mm_value = if include_mm_value_calculation(&data) {
+                self.mm_value(context.last_mid, data.mid)?
+            } else {
+                0.0
+            };
+            let cc_value = self.cc_value(context.last_rcid, data.lcid)?;
+            let ruby_extension = data
+                .ruby
+                .chars()
+                .count()
+                .saturating_sub(last_ruby_count) as f32;
+            let score = context.last_value
+                + mm_value
+                + cc_value
+                + data.value
+                - ruby_extension
+                - ignore_cc_value;
+
+            let insertion_index = result
+                .iter()
+                .rposition(|item| item.score >= score)
+                .map_or(0, |index| index + 1);
+            if insertion_index >= n_best {
+                continue;
+            }
+
+            if result.len() >= n_best {
+                result.pop();
+            }
+            result.insert(
+                insertion_index,
+                RankedPrediction {
+                    word: data.word,
+                    score,
+                },
+            );
+        }
+
+        Ok(result)
+    }
+
     pub fn raw_prefix_entries(
         &self,
         key: &str,
@@ -732,6 +813,44 @@ impl PredictionDictionary {
     }
 }
 
+fn word_type(cid: u16) -> u8 {
+    if cid == 0 || cid == 1316 {
+        return 3;
+    }
+    if matches!(cid, 1315 | 6 | 557..=560) {
+        return 0;
+    }
+    if matches!(
+        cid,
+        561..=867
+            | 1283..=1296
+            | 1306..=1309
+            | 11..=52
+            | 555..=556
+            | 1281..=1282
+            | 1314
+            | 3
+            | 2
+            | 4
+            | 5
+            | 1
+            | 9
+    ) {
+        return 1;
+    }
+    2
+}
+
+fn include_mm_value_calculation(data: &DicdataElement) -> bool {
+    if (895..=1280).contains(&data.lcid) || (895..=1280).contains(&data.rcid) {
+        return true;
+    }
+    if (1297..=1305).contains(&data.lcid) || (1297..=1305).contains(&data.rcid) {
+        return true;
+    }
+    word_type(data.lcid) == 1 || word_type(data.rcid) == 1
+}
+
 fn prediction_usable(rcid: u16) -> bool {
     PREDICTION_UNUSABLE_RCIDS.binary_search(&rcid).is_err()
 }
@@ -801,6 +920,38 @@ pub fn raw_prefix_words(
         .collect())
 }
 
+pub fn ranked_prefix_words(
+    input: &str,
+    dictionary_path: impl AsRef<Path>,
+    n_best: usize,
+) -> Result<Vec<String>, DictionaryError> {
+    if input.is_empty() || n_best == 0 {
+        return Ok(Vec::new());
+    }
+
+    let dictionary = cached_prediction_dictionary(dictionary_path)?;
+    let reading = dictionary_reading(input);
+    let entries = dictionary.raw_prefix_entries(&reading, false)?;
+    let ranked = dictionary.rank_prediction_entries(
+        entries,
+        reading.chars().count(),
+        PredictionContext::default(),
+        n_best,
+    )?;
+
+    let mut seen = HashSet::new();
+    Ok(ranked
+        .into_iter()
+        .filter_map(|item| {
+            if item.word.is_empty() || !seen.insert(item.word.clone()) {
+                None
+            } else {
+                Some(item.word)
+            }
+        })
+        .collect())
+}
+
 fn words_json(words: &[String]) -> String {
     let mut output = String::from("[");
     for (index, word) in words.iter().enumerate() {
@@ -830,7 +981,7 @@ fn words_json(words: &[String]) -> String {
 }
 
 fn raw_prefix_words_json(input: &str, dictionary_path: &str) -> String {
-    match raw_prefix_words(input, dictionary_path) {
+    match ranked_prefix_words(input, dictionary_path, 10) {
         Ok(words) => words_json(&words),
         Err(_) => "[]".to_owned(),
     }
