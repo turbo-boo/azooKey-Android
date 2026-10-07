@@ -25,19 +25,12 @@ internal class CandidateFlowLayout(
     private val horizontalSpacing = dp(10f)
     private val verticalSpacing = dp(3f)
     private val dividerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = if (
-            AzooKeyViewStyle.palette(context).text ==
-            AzooKeyVisualDesign.DARK.text
-        ) {
-            0x33FFFFFF
-        } else {
-            0x33000000
-        }
         strokeWidth = max(1f, density)
     }
     private val dividerYs = mutableListOf<Float>()
 
     init {
+        refreshStyle()
         setWillNotDraw(false)
         setPadding(
             dp(15f),
@@ -45,6 +38,19 @@ internal class CandidateFlowLayout(
             dp(10f),
             dp(3f),
         )
+    }
+
+    fun refreshStyle() {
+        dividerPaint.color =
+            if (
+                AzooKeyViewStyle.palette(context).text ==
+                AzooKeyVisualDesign.DARK.text
+            ) {
+                0x33FFFFFF
+            } else {
+                0x33000000
+            }
+        invalidate()
     }
 
     override fun onMeasure(

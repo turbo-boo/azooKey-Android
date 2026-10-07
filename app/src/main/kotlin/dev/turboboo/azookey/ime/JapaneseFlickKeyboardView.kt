@@ -131,11 +131,31 @@ class JapaneseFlickKeyboardView(
     init {
         orientation = VERTICAL
         setPadding(0, 0, 0, 0)
-        setBackgroundColor(AzooKeyViewStyle.palette(context).background)
+        background = KeyboardThemeBackgroundDrawable(
+            context = context,
+            theme = AzooKeyViewStyle.theme(context),
+        )
 
         addView(candidateBar)
         addView(createGrid().also { currentGrid = it })
         addView(expandedCandidateArea)
+    }
+
+    fun refreshTheme() {
+        val theme = AzooKeyViewStyle.theme(context)
+        background = KeyboardThemeBackgroundDrawable(
+            context = context,
+            theme = theme,
+        )
+        candidateBar.setBackgroundColor(theme.resultBackgroundColor)
+        candidateArea.setBackgroundColor(theme.resultBackgroundColor)
+        expandedCandidateArea.setBackgroundColor(theme.resultBackgroundColor)
+        expandedCandidateFlow.refreshStyle()
+        AzooKeyViewStyle.styleCandidate(expandCandidatesButton)
+
+        replaceGrid()
+        setCandidates(currentCandidates)
+        invalidate()
     }
 
     fun setEnterKeyLabel(label: String) {
