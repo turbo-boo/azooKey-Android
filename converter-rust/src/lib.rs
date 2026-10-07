@@ -133,6 +133,7 @@ impl Default for PredictionContext {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct RankedPrediction {
     pub word: String,
+    pub ruby: String,
     pub score: f32,
 }
 
@@ -169,6 +170,7 @@ fn prediction_path_from_json(
 pub struct PredictionSeed {
     pub ruby: String,
     pub prefix_text: String,
+    pub prefix_ruby: String,
     pub context: PredictionContext,
 }
 
@@ -530,6 +532,10 @@ impl PredictionDictionary {
             .iter()
             .map(|item| item.word.as_str())
             .collect::<String>();
+        let prefix_ruby = data[..prefix_end]
+            .iter()
+            .map(|item| item.ruby.as_str())
+            .collect::<String>();
         let ruby = data[last_clause.start..last_clause.end]
             .iter()
             .map(|item| item.ruby.as_str())
@@ -561,6 +567,7 @@ impl PredictionDictionary {
         Ok(Some(PredictionSeed {
             ruby,
             prefix_text,
+            prefix_ruby,
             context: PredictionContext {
                 last_rcid,
                 next_lcid,
@@ -644,6 +651,7 @@ impl PredictionDictionary {
 
         for item in &mut ranked {
             item.word = format!("{}{}", seed.prefix_text, item.word);
+            item.ruby = format!("{}{}", seed.prefix_ruby, item.ruby);
         }
         Ok(ranked)
     }
@@ -724,6 +732,7 @@ impl PredictionDictionary {
                 insertion_index,
                 RankedPrediction {
                     word: data.word,
+                    ruby: data.ruby,
                     score,
                 },
             );
@@ -1841,6 +1850,7 @@ mod tests {
 
         assert_eq!("ガッコウ", seed.ruby);
         assert_eq!("私は", seed.prefix_text);
+        assert_eq!("ワタシハ", seed.prefix_ruby);
         assert_eq!(
             PredictionContext {
                 last_rcid: 261,
@@ -1864,6 +1874,7 @@ mod tests {
         let seed = PredictionSeed {
             ruby: "ガッコウ".to_owned(),
             prefix_text: "私は".to_owned(),
+            prefix_ruby: "ワタシハ".to_owned(),
             context: PredictionContext {
                 last_rcid: 261,
                 next_lcid: 1285,
@@ -1898,6 +1909,8 @@ mod tests {
             vec!["私は学校".to_owned(), "私は学校へ".to_owned()],
             ranked.iter().map(|item| item.word.clone()).collect::<Vec<_>>(),
         );
+        assert_eq!("ワタシハガッコウ", ranked[0].ruby);
+        assert_eq!("ワタシハガッコウヘ", ranked[1].ruby);
         assert_eq!(-56.0, ranked[0].score);
         assert_eq!(-56.0, ranked[1].score);
 
