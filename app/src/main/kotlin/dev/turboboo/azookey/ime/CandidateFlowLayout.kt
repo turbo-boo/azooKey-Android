@@ -165,7 +165,7 @@ internal class CandidateFlowLayout(
     override fun generateLayoutParams(
         params: LayoutParams?,
     ): LayoutParams =
-        LayoutParams(params)
+        params?.let(::LayoutParams) ?: generateDefaultLayoutParams()
 
     override fun checkLayoutParams(
         params: LayoutParams?,
