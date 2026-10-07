@@ -1095,6 +1095,40 @@ mod tests {
     }
 
     #[test]
+    fn mm_binary_reads_dense_values_and_mid_500_is_neutral() {
+        let root = temporary_dictionary_root("mm");
+        fs::create_dir_all(root.join("louds")).unwrap();
+        fs::write(root.join("louds/charID.chid"), "ア").unwrap();
+
+        let mut values = vec![0.0f32; MID_COUNT * MID_COUNT];
+        values[2 * MID_COUNT + 3] = -2.75;
+        let mut bytes = Vec::with_capacity(values.len() * 4);
+        for value in values {
+            bytes.extend_from_slice(&value.to_le_bytes());
+        }
+        fs::write(root.join("mm.binary"), bytes).unwrap();
+
+        let dictionary = PredictionDictionary::open(&root).unwrap();
+        assert_eq!(-2.75, dictionary.mm_value(2, 3).unwrap());
+        assert_eq!(0.0, dictionary.mm_value(500, 3).unwrap());
+        assert_eq!(0.0, dictionary.mm_value(2, 500).unwrap());
+
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn missing_mm_binary_matches_upstream_zero_fallback() {
+        let root = temporary_dictionary_root("mm-missing");
+        fs::create_dir_all(root.join("louds")).unwrap();
+        fs::write(root.join("louds/charID.chid"), "ア").unwrap();
+
+        let dictionary = PredictionDictionary::open(&root).unwrap();
+        assert_eq!(0.0, dictionary.mm_value(12, 34).unwrap());
+
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn dictionary_cache_reuses_open_dictionary() {
         let root = temporary_dictionary_root("cache");
         fs::create_dir_all(root.join("louds")).unwrap();
