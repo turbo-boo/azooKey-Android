@@ -17,6 +17,7 @@ class AzooKeyInputMethodService : InputMethodService() {
     private val candidateWorker = Executors.newSingleThreadExecutor()
     private lateinit var candidateCoordinator: CandidateCoordinator
     private var keyboardView: JapaneseFlickKeyboardView? = null
+    private var activeEditorInfo: EditorInfo? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -46,13 +47,17 @@ class AzooKeyInputMethodService : InputMethodService() {
 
     override fun onStartInput(attribute: EditorInfo?, restarting: Boolean) {
         super.onStartInput(attribute, restarting)
+        activeEditorInfo = attribute
         controller.reset()
         candidateCoordinator.clear()
+        updateEnterKeyPresentation()
     }
 
     override fun onFinishInput() {
         controller.reset()
         candidateCoordinator.clear()
+        activeEditorInfo = null
+        updateEnterKeyPresentation()
         super.onFinishInput()
     }
 
@@ -72,6 +77,7 @@ class AzooKeyInputMethodService : InputMethodService() {
                         candidateCoordinator.complete(text)
                         controller.selectCandidate(text, connection)
                         candidateCoordinator.clear()
+                        updateEnterKeyPresentation()
                     }
                 }
 
@@ -93,14 +99,18 @@ class AzooKeyInputMethodService : InputMethodService() {
                     withEditorConnection { connection ->
                         controller.space(connection)
                         candidateCoordinator.clear()
+                        updateEnterKeyPresentation()
                     }
                 }
 
                 override fun onEnter() {
                     withEditorConnection { connection ->
+                        val hadComposition = controller.composingText.isNotEmpty()
                         controller.commit(connection)
                         candidateCoordinator.clear()
-                        if (!sendDefaultEditorAction(true)) {
+                        updateEnterKeyPresentation()
+
+                        if (!hadComposition && !sendDefaultEditorAction(true)) {
                             connection.commitText("\n")
                         }
                     }
@@ -120,6 +130,7 @@ class AzooKeyInputMethodService : InputMethodService() {
             },
         )
         keyboardView = view
+        updateEnterKeyPresentation()
         candidateCoordinator.request(controller.composingText)
         return view
     }
@@ -131,7 +142,21 @@ class AzooKeyInputMethodService : InputMethodService() {
     }
 
     private fun refreshCandidates() {
+        updateEnterKeyPresentation()
         candidateCoordinator.request(controller.composingText)
+    }
+
+    private fun updateEnterKeyPresentation() {
+        val imeOptions =
+            activeEditorInfo?.imeOptions
+                ?: currentInputEditorInfo?.imeOptions
+                ?: EditorInfo.IME_ACTION_NONE
+        keyboardView?.setEnterKeyLabel(
+            EnterKeyPresentation.label(
+                imeOptions = imeOptions,
+                hasComposition = controller.composingText.isNotEmpty(),
+            ),
+        )
     }
 
     private inline fun withEditorConnection(block: (EditorConnection) -> Unit) {

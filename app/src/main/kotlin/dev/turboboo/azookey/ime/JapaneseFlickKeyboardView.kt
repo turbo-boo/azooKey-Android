@@ -126,6 +126,7 @@ class JapaneseFlickKeyboardView(
     private var candidatesExpanded = false
     private var keyboardMode = KeyboardMode.HIRAGANA
     private var latinUppercase = false
+    private var enterKeyLabel = "改行"
 
     init {
         orientation = VERTICAL
@@ -135,6 +136,14 @@ class JapaneseFlickKeyboardView(
         addView(candidateBar)
         addView(createGrid().also { currentGrid = it })
         addView(expandedCandidateArea)
+    }
+
+    fun setEnterKeyLabel(label: String) {
+        if (enterKeyLabel == label) {
+            return
+        }
+        enterKeyLabel = label
+        replaceGrid()
     }
 
     fun setCandidates(candidates: List<String>) {
@@ -446,7 +455,7 @@ class JapaneseFlickKeyboardView(
             onClick = callbacks::onSpace,
         )
         addSpecialKey(
-            "↵",
+            enterKeyLabel,
             row = 2,
             column = 4,
             rowSpan = 2,
