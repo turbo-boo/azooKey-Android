@@ -77,6 +77,7 @@ jobs:
             -print -quit)"
           test -n "$char_id_path"
           dictionary_path="${char_id_path%/louds/charID.chid}"
+          dictionary_path="$(realpath "$dictionary_path")"
           test -f "$dictionary_path/louds/charID.chid"
           AZOOKEY_DICTIONARY_PATH="$dictionary_path" \
             cargo test --manifest-path converter-rust/Cargo.toml \
