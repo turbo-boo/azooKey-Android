@@ -138,12 +138,12 @@ pub struct RankedPrediction {
 }
 
 #[derive(Debug, Deserialize)]
-#[derive(Debug, Deserialize)]
 struct UserDictionaryEntryWire {
     reading: String,
     word: String,
 }
 
+#[derive(Debug, Deserialize)]
 struct PredictionPathElementWire {
     word: String,
     ruby: String,
@@ -1459,11 +1459,7 @@ pub extern "system" fn Java_dev_turboboo_azookey_ime_RustPredictionBridge_replac
     let outcome = unowned_env.with_env(|_env| -> Result<jboolean, jni::errors::Error> {
         let dictionary_path: String = dictionary_path.to_string();
         let json: String = json.to_string();
-        Ok(if replace_user_dictionary_json(&dictionary_path, &json).is_ok() {
-            1
-        } else {
-            0
-        })
+        Ok(replace_user_dictionary_json(&dictionary_path, &json).is_ok())
     });
     outcome.resolve::<jni::errors::ThrowRuntimeExAndDefault>()
 }
