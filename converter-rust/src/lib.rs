@@ -695,19 +695,19 @@ mod tests {
     }
 
     #[test]
-    fn pinned_dictionary_exposes_azookey_entry_when_available() {
+    fn pinned_dictionary_matches_upstream_must_word_when_available() {
         let Ok(path) = std::env::var("AZOOKEY_DICTIONARY_PATH") else {
             return;
         };
 
         let dictionary = PredictionDictionary::open(path).expect("open pinned dictionary");
         let entries = dictionary
-            .raw_prefix_entries("アズーキー", true)
+            .raw_prefix_entries("アサッテ", true)
             .expect("read prefix entries");
 
         assert!(
-            entries.iter().any(|entry| entry.word == "azooKey"),
-            "expected the pinned dictionary to contain azooKey; got {entries:?}",
+            entries.iter().any(|entry| entry.word == "明後日"),
+            "expected the pinned dictionary to contain アサッテ -> 明後日; got {entries:?}",
         );
     }
 
