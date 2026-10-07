@@ -41,7 +41,7 @@ internal fun mergeHybridCandidates(
                 element = exactCandidate,
             )
             while (mixedTop.size > 5) {
-                mixedTop.removeLast()
+                mixedTop.removeAt(mixedTop.lastIndex)
             }
         }
     }
