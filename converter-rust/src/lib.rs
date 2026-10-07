@@ -423,7 +423,6 @@ impl Louds {
 }
 
 #[derive(Debug)]
-#[derive(Debug)]
 struct CcLine {
     default_value: f32,
     overrides: HashMap<u16, f32>,
