@@ -1646,6 +1646,47 @@ mod tests {
     }
 
     #[test]
+    fn prediction_path_json_decodes_swift_wire_format() {
+        let path = prediction_path_from_json(
+            r#"[
+                {"word":"私","ruby":"ワタシ","lcid":1285,"rcid":1285,"mid":1,"value":-2.0},
+                {"word":"は","ruby":"ハ","lcid":261,"rcid":261,"mid":500,"value":-1.0}
+            ]"#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            vec![
+                DicdataElement {
+                    word: "私".to_owned(),
+                    ruby: "ワタシ".to_owned(),
+                    lcid: 1285,
+                    rcid: 1285,
+                    mid: 1,
+                    value: -2.0,
+                },
+                DicdataElement {
+                    word: "は".to_owned(),
+                    ruby: "ハ".to_owned(),
+                    lcid: 261,
+                    rcid: 261,
+                    mid: 500,
+                    value: -1.0,
+                },
+            ],
+            path,
+        );
+    }
+
+    #[test]
+    fn prediction_path_json_rejects_out_of_range_ids() {
+        assert!(prediction_path_from_json(
+            r#"[{"word":"x","ruby":"エックス","lcid":70000,"rcid":1,"mid":1,"value":-1.0}]"#,
+        )
+        .is_err());
+    }
+
+    #[test]
     fn prediction_seed_reconstructs_last_clause_context() {
         let root = temporary_dictionary_root("prediction-seed");
         fs::create_dir_all(root.join("louds")).unwrap();
