@@ -2,28 +2,24 @@ plugins {
     id("com.android.application")
 }
 
-val rustJniLibsDir = layout.buildDirectory.dir("generated/rustJniLibs")
-val rustTargetDir = layout.buildDirectory.dir("rust-target")
+val rustJniLibsDir = layout.buildDirectory.dir("generated/rustJniLibs").get().asFile
+val rustTargetDir = layout.buildDirectory.dir("rust-target").get().asFile
+val rustManifest = rootProject.file("converter-rust/Cargo.toml")
+val rustSources = rootProject.file("converter-rust/src")
+val rustWorkingDirectory = rootProject.file("converter-rust")
 
 val buildRustPrediction = tasks.register<org.gradle.api.tasks.Exec>("buildRustPrediction") {
     group = "build"
     description = "Builds the Rust prediction JNI library for Android."
 
-    val manifest = rootProject.file("converter-rust/Cargo.toml")
-    val sources = rootProject.file("converter-rust/src")
-
-    workingDir(rootProject.file("converter-rust"))
-    inputs.file(manifest)
-    inputs.dir(sources)
+    workingDir(rustWorkingDirectory)
+    inputs.file(rustManifest)
+    inputs.dir(rustSources)
     outputs.dir(rustJniLibsDir)
-
-    doFirst {
-        rustJniLibsDir.get().asFile.deleteRecursively()
-    }
 
     environment(
         "CARGO_TARGET_DIR",
-        rustTargetDir.get().asFile.absolutePath,
+        rustTargetDir.absolutePath,
     )
     commandLine(
         "cargo",
@@ -37,11 +33,11 @@ val buildRustPrediction = tasks.register<org.gradle.api.tasks.Exec>("buildRustPr
         "-t",
         "x86_64",
         "-o",
-        rustJniLibsDir.get().asFile.absolutePath,
+        rustJniLibsDir.absolutePath,
         "build",
         "--release",
         "--manifest-path",
-        manifest.absolutePath,
+        rustManifest.absolutePath,
     )
 }
 
@@ -63,7 +59,7 @@ android {
     }
 
     sourceSets {
-        getByName("main").jniLibs.srcDir(rustJniLibsDir.get().asFile)
+        getByName("main").jniLibs.srcDir(rustJniLibsDir)
     }
 }
 

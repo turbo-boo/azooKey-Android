@@ -9,7 +9,7 @@ import org.json.JSONArray
 private const val DICTIONARY_ASSET_ROOT = "azookey_dictionary"
 private const val DICTIONARY_REVISION = "4d418525b090cf49c219819d05a7e3cc2a4346eb"
 
-class SwiftCandidateProvider(
+internal class SwiftCandidateProvider(
     context: Context,
     private val predictionShadow: PredictionShadow? = null,
 ) : CandidateProvider {

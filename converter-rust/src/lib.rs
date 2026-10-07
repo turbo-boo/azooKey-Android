@@ -397,11 +397,18 @@ impl Louds {
 }
 
 #[derive(Debug)]
+#[derive(Debug)]
+struct CcLine {
+    default_value: f32,
+    overrides: HashMap<u16, f32>,
+}
+
 pub struct PredictionDictionary {
     root: PathBuf,
     char_ids: HashMap<char, u8>,
     louds_cache: Mutex<HashMap<String, Arc<Louds>>>,
     loudstxt3_cache: Mutex<HashMap<String, Arc<Vec<u8>>>>,
+    cc_cache: Mutex<HashMap<u16, Option<Arc<CcLine>>>>,
 }
 
 static PREDICTION_DICTIONARY_CACHE: OnceLock<
@@ -431,6 +438,7 @@ impl PredictionDictionary {
             char_ids,
             louds_cache: Mutex::new(HashMap::new()),
             loudstxt3_cache: Mutex::new(HashMap::new()),
+            cc_cache: Mutex::new(HashMap::new()),
         })
     }
 
@@ -511,6 +519,99 @@ impl PredictionDictionary {
             cache
                 .entry(identifier.to_owned())
                 .or_insert_with(|| loaded.clone())
+                .clone(),
+        ))
+    }
+
+    pub fn cc_value(
+        &self,
+        former: u16,
+        latter: u16,
+    ) -> Result<f32, DictionaryError> {
+        let Some(line) = self.load_cc_line(former)? else {
+            return Ok(-25.0);
+        };
+        Ok(line
+            .overrides
+            .get(&latter)
+            .copied()
+            .unwrap_or(line.default_value))
+    }
+
+    fn load_cc_line(
+        &self,
+        former: u16,
+    ) -> Result<Option<Arc<CcLine>>, DictionaryError> {
+        if let Some(cached) = self
+            .cc_cache
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .get(&former)
+            .cloned()
+        {
+            return Ok(cached);
+        }
+
+        let path = self.root.join("cb").join(format!("{former}.binary"));
+        let bytes = match fs::read(path) {
+            Ok(bytes) => bytes,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                self.cc_cache
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                    .insert(former, None);
+                return Ok(None);
+            }
+            Err(error) => return Err(error.into()),
+        };
+
+        if bytes.is_empty() {
+            self.cc_cache
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .insert(former, None);
+            return Ok(None);
+        }
+        if bytes.len() % 8 != 0 {
+            return Err(DictionaryError::InvalidFormat(
+                "CC binary size must be a multiple of 8 bytes",
+            ));
+        }
+
+        let first_key = read_i32_le(&bytes, 0)?;
+        if first_key != -1 {
+            return Err(DictionaryError::InvalidFormat(
+                "CC binary must begin with the -1 default entry",
+            ));
+        }
+        let default_value = f32::from_bits(read_u32_le(&bytes, 4)?);
+        let mut overrides = HashMap::new();
+
+        for offset in (8..bytes.len()).step_by(8) {
+            let key = read_i32_le(&bytes, offset)?;
+            if !(0..=1318).contains(&key) {
+                return Err(DictionaryError::InvalidFormat(
+                    "CC binary contains an out-of-range class id",
+                ));
+            }
+            let value = f32::from_bits(read_u32_le(&bytes, offset + 4)?);
+            overrides.insert(key as u16, value);
+        }
+
+        let loaded = Arc::new(CcLine {
+            default_value,
+            overrides,
+        });
+        let mut cache = self
+            .cc_cache
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        Ok(Some(
+            cache
+                .entry(former)
+                .or_insert_with(|| Some(loaded.clone()))
+                .as_ref()
+                .expect("new CC cache entry contains a line")
                 .clone(),
         ))
     }
@@ -805,6 +906,16 @@ fn read_u16_le(bytes: &[u8], offset: usize) -> Result<u16, DictionaryError> {
         .try_into()
         .map_err(|_| DictionaryError::InvalidFormat("invalid u16 field"))?;
     Ok(u16::from_le_bytes(array))
+}
+
+fn read_i32_le(bytes: &[u8], offset: usize) -> Result<i32, DictionaryError> {
+    let slice = bytes
+        .get(offset..offset.saturating_add(4))
+        .ok_or(DictionaryError::InvalidFormat("unexpected end of i32 field"))?;
+    let array: [u8; 4] = slice
+        .try_into()
+        .map_err(|_| DictionaryError::InvalidFormat("invalid i32 field"))?;
+    Ok(i32::from_le_bytes(array))
 }
 
 fn read_u32_le(bytes: &[u8], offset: usize) -> Result<u32, DictionaryError> {
