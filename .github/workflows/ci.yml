@@ -72,10 +72,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          dictionary_path="$(find converter-swift/.build -type d \
-            -path '*/AzooKeyKanaKanjiConverter_KanaKanjiConverterModuleWithDefaultDictionary.bundle/Dictionary' \
+          char_id_path="$(find converter-swift/.build -type f \
+            -path '*/AzooKeyKanaKanjiConverter_KanaKanjiConverterModuleWithDefaultDictionary.bundle/Dictionary/louds/charID.chid' \
             -print -quit)"
-          test -n "$dictionary_path"
+          test -n "$char_id_path"
+          dictionary_path="${char_id_path%/louds/charID.chid}"
+          test -f "$dictionary_path/louds/charID.chid"
           AZOOKEY_DICTIONARY_PATH="$dictionary_path" \
             cargo test --manifest-path converter-rust/Cargo.toml \
               tests::pinned_dictionary_matches_upstream_must_word_when_available -- --exact
