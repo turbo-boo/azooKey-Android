@@ -962,6 +962,28 @@ mod tests {
     }
 
     #[test]
+    fn cc_binary_uses_default_and_sparse_overrides() {
+        let root = temporary_dictionary_root("cc");
+        fs::create_dir_all(root.join("louds")).unwrap();
+        fs::create_dir_all(root.join("cb")).unwrap();
+        fs::write(root.join("louds/charID.chid"), "ア").unwrap();
+
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&(-1i32).to_le_bytes());
+        bytes.extend_from_slice(&(-5.0f32).to_le_bytes());
+        bytes.extend_from_slice(&(7i32).to_le_bytes());
+        bytes.extend_from_slice(&(-1.5f32).to_le_bytes());
+        fs::write(root.join("cb/0.binary"), bytes).unwrap();
+
+        let dictionary = PredictionDictionary::open(&root).unwrap();
+        assert_eq!(-1.5, dictionary.cc_value(0, 7).unwrap());
+        assert_eq!(-5.0, dictionary.cc_value(0, 8).unwrap());
+        assert_eq!(-25.0, dictionary.cc_value(1, 8).unwrap());
+
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn dictionary_cache_reuses_open_dictionary() {
         let root = temporary_dictionary_root("cache");
         fs::create_dir_all(root.join("louds")).unwrap();
