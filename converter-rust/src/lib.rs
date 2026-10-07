@@ -14,6 +14,7 @@
 //! License: MIT
 
 use jni::objects::{JClass, JString};
+use jni::sys::{jfloat, jint};
 use jni::EnvUnowned;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::error::Error;
@@ -925,6 +926,20 @@ pub fn ranked_prefix_words(
     dictionary_path: impl AsRef<Path>,
     n_best: usize,
 ) -> Result<Vec<String>, DictionaryError> {
+    ranked_prefix_words_with_context(
+        input,
+        dictionary_path,
+        n_best,
+        PredictionContext::default(),
+    )
+}
+
+pub fn ranked_prefix_words_with_context(
+    input: &str,
+    dictionary_path: impl AsRef<Path>,
+    n_best: usize,
+    context: PredictionContext,
+) -> Result<Vec<String>, DictionaryError> {
     if input.is_empty() || n_best == 0 {
         return Ok(Vec::new());
     }
@@ -935,7 +950,7 @@ pub fn ranked_prefix_words(
     let ranked = dictionary.rank_prediction_entries(
         entries,
         reading.chars().count(),
-        PredictionContext::default(),
+        context,
         n_best,
     )?;
 
@@ -1009,6 +1024,52 @@ pub extern "system" fn Java_dev_turboboo_azookey_ime_RustPredictionBridge_prefix
             env,
             raw_prefix_words_json(&input, &dictionary_path),
         )
+    });
+    outcome.resolve::<jni::errors::ThrowRuntimeExAndDefault>()
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_turboboo_azookey_ime_RustPredictionBridge_prefixWordsWithContextJson<'caller>(
+    mut unowned_env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
+    input: JString<'caller>,
+    dictionary_path: JString<'caller>,
+    last_rcid: jint,
+    next_lcid: jint,
+    last_mid: jint,
+    last_value: jfloat,
+    n_best: jint,
+) -> JString<'caller> {
+    let outcome = unowned_env.with_env(|env| -> Result<_, jni::errors::Error> {
+        let input: String = input.to_string();
+        let dictionary_path: String = dictionary_path.to_string();
+
+        let json = match (
+            u16::try_from(last_rcid),
+            u16::try_from(next_lcid),
+            u16::try_from(last_mid),
+            usize::try_from(n_best),
+        ) {
+            (Ok(last_rcid), Ok(next_lcid), Ok(last_mid), Ok(n_best)) => {
+                match ranked_prefix_words_with_context(
+                    &input,
+                    &dictionary_path,
+                    n_best,
+                    PredictionContext {
+                        last_rcid,
+                        next_lcid,
+                        last_mid,
+                        last_value,
+                    },
+                ) {
+                    Ok(words) => words_json(&words),
+                    Err(_) => "[]".to_owned(),
+                }
+            }
+            _ => "[]".to_owned(),
+        };
+
+        JString::from_str(env, json)
     });
     outcome.resolve::<jni::errors::ThrowRuntimeExAndDefault>()
 }
