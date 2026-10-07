@@ -3,6 +3,7 @@ package dev.turboboo.azookey.ime
 import android.content.Context
 import android.content.res.AssetManager
 import dev.turboboo.azookey.converter.AzooKeyAndroidJNI
+import dev.turboboo.azookey.userdictionary.UserDictionaryStore
 import java.io.File
 
 private const val DICTIONARY_ASSET_ROOT = "azookey_dictionary"
@@ -40,6 +41,25 @@ internal class SwiftCandidateProvider(
 ) : CandidateProvider {
     private val appContext = context.applicationContext
     private val stablePredictionCache = StablePredictionCache()
+    private val userDictionaryStore = UserDictionaryStore(appContext)
+    private val userDictionarySynchronizer = UserDictionarySynchronizer(
+        snapshot = userDictionaryStore::json,
+        apply = { dictionaryPath, json ->
+            val swiftApplied = runCatching {
+                AzooKeyAndroidJNI.replaceUserDictionaryJSON(
+                    json,
+                    dictionaryPath,
+                )
+            }.getOrDefault(false)
+            val rustApplied = runCatching {
+                RustPredictionBridge.replaceUserDictionaryJson(
+                    dictionaryPath,
+                    json,
+                )
+            }.getOrDefault(false)
+            swiftApplied && rustApplied
+        },
+    )
     private val dictionaryDirectory: File by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         installDictionary()
     }
@@ -51,6 +71,16 @@ internal class SwiftCandidateProvider(
         }
 
         val dictionaryPath = dictionaryDirectory.absolutePath
+        if (!userDictionarySynchronizer.sync(dictionaryPath)) {
+            stablePredictionCache.clear()
+            return parseCandidateJson(
+                AzooKeyAndroidJNI.candidatesJSON(
+                    input,
+                    dictionaryPath,
+                ),
+            )
+        }
+
         val bridge = parseConversionBridgeJson(
             AzooKeyAndroidJNI.conversionBridgeJSON(
                 input,

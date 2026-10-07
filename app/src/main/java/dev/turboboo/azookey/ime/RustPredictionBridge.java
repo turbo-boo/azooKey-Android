@@ -7,6 +7,11 @@ final class RustPredictionBridge {
 
     private RustPredictionBridge() {}
 
+    static native boolean replaceUserDictionaryJson(
+        String dictionaryPath,
+        String json
+    );
+
     static native String prefixWordsJson(String input, String dictionaryPath);
 
     static native String prefixWordsFromPathJson(
