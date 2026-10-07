@@ -172,7 +172,7 @@ jobs:
       - name: Test Rust prediction core against pinned dictionary
         env:
           AZOOKEY_DICTIONARY_PATH: converter-swift/.build/checkouts/AzooKeyKanaKanjiConverter/Sources/KanaKanjiConverterModuleWithDefaultDictionary/azooKey_dictionary_storage/Dictionary
-        run: cargo test --manifest-path converter-rust/Cargo.toml pinned_dictionary_exposes_azookey_entry_when_available -- --exact
+        run: cargo test --manifest-path converter-rust/Cargo.toml tests::pinned_dictionary_exposes_azookey_entry_when_available -- --exact
 
       - name: Publish SwiftKit Core to Maven local
         working-directory: converter-swift
