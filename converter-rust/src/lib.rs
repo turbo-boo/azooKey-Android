@@ -2130,6 +2130,39 @@ mod tests {
         fs::remove_dir_all(root).unwrap();
     }
 
+    #[test]
+    fn learned_memory_prefix_entries_are_loaded_without_static_terminal_filter() {
+        let base = temporary_dictionary_root("learning-memory");
+        let root = base.join("dictionary");
+        let memory = base.join("learning-memory");
+        fs::create_dir_all(root.join("louds")).unwrap();
+        fs::create_dir_all(&memory).unwrap();
+        fs::write(root.join("louds/charID.chid"), "アイ").unwrap();
+
+        write_memory_fixture(
+            &memory,
+            &[0, 1],
+            DicdataElement {
+                word: "学習候補".to_owned(),
+                ruby: "アイ".to_owned(),
+                lcid: 7,
+                rcid: 33,
+                mid: 1,
+                value: -1.0,
+            },
+        );
+
+        let dictionary = PredictionDictionary::open(&root).unwrap();
+        let entries = dictionary.raw_prefix_entries("ア", false).unwrap();
+
+        assert!(
+            entries.iter().any(|entry| entry.word == "学習候補" && entry.rcid == 33),
+            "learned memory must bypass the static dictionary terminal filter: {entries:?}",
+        );
+
+        fs::remove_dir_all(base).unwrap();
+    }
+
     #[derive(Default, Clone)]
     struct Node {
         children: BTreeMap<u8, Node>,
