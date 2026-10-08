@@ -309,12 +309,25 @@ jobs:
           gradle-version: "9.6.0"
 
       - name: Run app tests, lint, and Android build
+        shell: bash
         run: |
+          set -o pipefail
           gradle --stacktrace \
             :converter-swift:assembleDebug \
             :app:testDebugUnitTest \
             :app:lintDebug \
-            :app:assembleDebug
+            :app:assembleDebug 2>&1 | tee "$GITHUB_WORKSPACE/android-integration-gradle.log"
+
+      # Keep the compiler and Gradle failure details even if GitHub's
+      # ephemeral job-log endpoint is unavailable to external diagnostics.
+      - name: Upload Android build failure log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-integration-failure-log
+          path: android-integration-gradle.log
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Verify packaged converter and APK
         shell: bash
