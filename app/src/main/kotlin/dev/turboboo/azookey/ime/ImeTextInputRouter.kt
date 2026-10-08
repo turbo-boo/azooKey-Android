@@ -11,6 +11,7 @@ enum class KeyboardInputMode {
     NUMBER_SYMBOLS,
     JAPANESE_QWERTY,
     LATIN_QWERTY,
+    EMOJI,
 }
 
 internal class ImeTextInputRouter(

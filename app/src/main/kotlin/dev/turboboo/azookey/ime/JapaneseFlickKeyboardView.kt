@@ -93,8 +93,23 @@ class JapaneseFlickKeyboardView(
                 KeyboardInputMode.LATIN -> KeyboardInputMode.LATIN_QWERTY
                 KeyboardInputMode.JAPANESE_QWERTY -> KeyboardInputMode.HIRAGANA
                 KeyboardInputMode.LATIN_QWERTY -> KeyboardInputMode.LATIN
+                KeyboardInputMode.EMOJI -> previousNonEmojiMode
             }
             switchKeyboardMode(next)
+        }
+    }
+    private val emojiToggle = Button(context).apply {
+        text = "☺"
+        contentDescription = "絵文字キーボード"
+        gravity = Gravity.CENTER
+        AzooKeyViewStyle.styleCandidate(this)
+        setOnClickListener {
+            val target = if (keyboardMode == KeyboardInputMode.EMOJI) {
+                previousNonEmojiMode
+            } else {
+                KeyboardInputMode.EMOJI
+            }
+            switchKeyboardMode(target)
         }
     }
     private val candidateBar = LinearLayout(context).apply {
@@ -119,6 +134,7 @@ class JapaneseFlickKeyboardView(
             LayoutParams(dp(33), candidateButtonHeight()))
         addView(actionButton("貼付", callbacks::onPaste),
             LayoutParams(dp(42), candidateButtonHeight()))
+        addView(emojiToggle, LayoutParams(dp(36), candidateButtonHeight()))
         addView(
             expandCandidatesButton,
             LayoutParams(
@@ -148,11 +164,15 @@ class JapaneseFlickKeyboardView(
     private var currentGrid: GridLayout? = null
     private var currentCandidates: List<String> = emptyList()
     private var candidatesExpanded = false
+    private var previousNonEmojiMode = KeyboardInputMode.HIRAGANA
     private var keyboardMode = KeyboardInputMode.HIRAGANA
     val inputMode: KeyboardInputMode
         get() = keyboardMode
     private var latinUppercase = false
     private var enterKeyLabel = "改行"
+    private val emojiPanel = EmojiKeyboardPanel(context, callbacks::onText).apply {
+        visibility = GONE
+    }
     private val qwertyPanel = QwertyKeyboardPanel(
         context = context,
         onText = callbacks::onText,
@@ -173,6 +193,7 @@ class JapaneseFlickKeyboardView(
         addView(candidateBar)
         addView(createGrid().also { currentGrid = it })
         addView(qwertyPanel)
+        addView(emojiPanel)
         addView(expandedCandidateArea)
     }
 
@@ -191,6 +212,7 @@ class JapaneseFlickKeyboardView(
         expandedCandidateArea.setBackgroundColor(theme.resultBackgroundColor)
         expandedCandidateFlow.refreshStyle()
         qwertyPanel.refreshTheme()
+        emojiPanel.refreshTheme()
         AzooKeyViewStyle.styleCandidate(expandCandidatesButton)
 
         replaceGrid()
@@ -287,13 +309,16 @@ class JapaneseFlickKeyboardView(
             candidateArea.visibility = INVISIBLE
             currentGrid?.visibility = GONE
             qwertyPanel.visibility = GONE
+            emojiPanel.visibility = GONE
             expandedCandidateArea.visibility = VISIBLE
             expandCandidatesButton.text = "⌃"
             expandCandidatesButton.contentDescription = "候補を閉じる"
         } else {
             candidateArea.visibility = VISIBLE
-            currentGrid?.visibility = if (keyboardMode.isQwerty) GONE else VISIBLE
+            currentGrid?.visibility =
+                if (keyboardMode.isQwerty || keyboardMode == KeyboardInputMode.EMOJI) GONE else VISIBLE
             qwertyPanel.visibility = if (keyboardMode.isQwerty) VISIBLE else GONE
+            emojiPanel.visibility = if (keyboardMode == KeyboardInputMode.EMOJI) VISIBLE else GONE
             expandedCandidateArea.visibility = GONE
             expandCandidatesButton.text = "⌄"
             expandCandidatesButton.contentDescription = "候補を展開"
@@ -395,6 +420,10 @@ class JapaneseFlickKeyboardView(
             ViewGroup.LayoutParams.MATCH_PARENT,
             gridHeight,
         )
+        emojiPanel.layoutParams = LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            gridHeight,
+        )
         val horizontalInset = metrics.horizontalInsetPx.roundToInt()
         grid.setPadding(horizontalInset, 0, horizontalInset, 0)
 
@@ -436,6 +465,7 @@ class JapaneseFlickKeyboardView(
                 KeyboardInputMode.NUMBER_SYMBOLS -> addNumberSymbolKeys()
                 KeyboardInputMode.JAPANESE_QWERTY -> addHiraganaKeys()
                 KeyboardInputMode.LATIN_QWERTY -> addLatinKeys()
+                KeyboardInputMode.EMOJI -> addHiraganaKeys()
             }
             addEditorKeys()
         }
@@ -555,9 +585,13 @@ class JapaneseFlickKeyboardView(
             return
         }
 
+        if (keyboardMode != KeyboardInputMode.EMOJI) previousNonEmojiMode = keyboardMode
         keyboardMode = mode
         callbacks.onKeyboardModeChanged(mode)
         qwertyPanel.setMode(mode)
+        emojiToggle.text = if (mode == KeyboardInputMode.EMOJI) "戻る" else "☺"
+        emojiToggle.contentDescription =
+            if (mode == KeyboardInputMode.EMOJI) "入力キーボードへ戻る" else "絵文字キーボード"
         qwertyToggle.text = if (mode.isQwerty) "フリック" else "QW"
         qwertyToggle.contentDescription =
             if (mode.isQwerty) "フリック入力へ切替" else "QWERTY入力へ切替"

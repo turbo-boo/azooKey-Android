@@ -275,6 +275,19 @@ class JapaneseFlickKeyboardViewTest {
         assertEquals(1, callbacks.pasteCount)
     }
 
+    @Test
+    fun emojiPanelInsertsEmojiAndReturnsToPriorMode() {
+        val callbacks = RecordingCallbacks()
+        val view = createView(callbacks)
+        findButton(view, "ABC").performClick()
+        findButton(view, "☺").performClick()
+        assertEquals(KeyboardInputMode.EMOJI, view.inputMode)
+        findButton(view, "😀").performClick()
+        assertEquals(listOf("😀"), callbacks.textInputs)
+        findButton(view, "戻る").performClick()
+        assertEquals(KeyboardInputMode.LATIN, view.inputMode)
+    }
+
     private fun createView(callbacks: RecordingCallbacks): JapaneseFlickKeyboardView {
         val context: Context = RuntimeEnvironment.getApplication()
         return JapaneseFlickKeyboardView(context, callbacks)
