@@ -55,7 +55,7 @@ internal class EmojiKeyboardPanel(
             useDefaultMargins = false
             setPadding(dp(2), 0, dp(2), dp(8))
         }
-        val width = (resources.displayMetrics.widthPixels - dp(8)) / 8
+        val width = ((resources.displayMetrics.widthPixels - dp(8)) / 8).coerceAtLeast(dp(32))
         values.forEachIndexed { index, emoji ->
             val button = Button(context).apply {
                 text = emoji
@@ -92,7 +92,7 @@ internal class EmojiKeyboardPanel(
     private fun remember(emoji: String) {
         val items = (listOf(emoji) + recent()).distinct().take(24)
         val array = JSONArray()
-        items.forEach(array::put)
+        items.forEach { array.put(it) }
         prefs.edit().putString("recent", array.toString()).apply()
     }
 
