@@ -25,6 +25,10 @@
     <string name="theme_reset">リセットする</string>
     <string name="theme_cancel">キャンセル</string>
     <string name="theme_save">保存</string>
+    <string name="flick_sensitivity">フリック感度</string>
+    <string name="flick_sensitivity_description">感度を高くすると、短い指の移動でもフリックとして認識されます。</string>
+    <string name="flick_sensitivity_value">感度: %1$d%%</string>
+    <string name="flick_sensitivity_reset">標準に戻す</string>
     <string name="user_dictionary">ユーザー辞書</string>
     <string name="user_dictionary_description">読みと単語を登録すると、かな漢字変換と予測変換の両方に反映されます。</string>
     <string name="user_dictionary_reading_hint">読み（例: おーぷんえーあい）</string>

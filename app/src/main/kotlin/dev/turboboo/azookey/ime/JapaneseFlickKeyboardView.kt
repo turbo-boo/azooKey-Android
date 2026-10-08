@@ -636,7 +636,7 @@ private class FlickKeyButton @JvmOverloads constructor(
     private val onSuggestion: (View, FlickSuggestionState?) -> Unit,
 ) : Button(context, attrs) {
     private val resolver = FlickDirectionResolver(
-        thresholdPx = 25f * resources.displayMetrics.density,
+        thresholdPx = FlickSensitivityStore(context).thresholdPx(resources.displayMetrics.density),
     )
     private val suggestionController = FlickSuggestionController(
         scheduler = HandlerRepeatScheduler(Handler(Looper.getMainLooper())),

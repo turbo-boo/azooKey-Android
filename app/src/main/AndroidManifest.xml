@@ -15,6 +15,10 @@
         </activity>
 
         <activity
+            android:name=".FlickSensitivityActivity"
+            android:exported="false" />
+
+        <activity
             android:name=".UserDictionaryActivity"
             android:exported="false" />
 
