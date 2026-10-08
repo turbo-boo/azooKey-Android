@@ -9,11 +9,23 @@ enum class KeyboardInputMode {
     HIRAGANA,
     LATIN,
     NUMBER_SYMBOLS,
+    JAPANESE_QWERTY,
+    LATIN_QWERTY,
 }
 
 internal class ImeTextInputRouter(
     private val controller: ImeController,
+    private val romaji: RomajiComposer = RomajiComposer(),
 ) {
+    val hasPendingRomaji: Boolean get() = romaji.hasPending
+    fun reset() = romaji.reset()
+    fun flush(connection: EditorConnection) {
+        val text = romaji.flush()
+        if (text.isNotEmpty()) controller.input(text, connection)
+    }
+    fun backspace(connection: EditorConnection) {
+        if (!romaji.backspace()) controller.backspace(connection)
+    }
     /**
      * @return true when kana-kanji candidates should be refreshed.
      */
@@ -24,13 +36,23 @@ internal class ImeTextInputRouter(
         connection: EditorConnection,
     ): Boolean {
         if (text.isEmpty()) return false
-        if (policy.directInput || mode != KeyboardInputMode.HIRAGANA) {
-            // Finish any composition before inserting literal text.
+        if (policy.directInput || mode !in setOf(
+                KeyboardInputMode.HIRAGANA,
+                KeyboardInputMode.JAPANESE_QWERTY,
+            )
+        ) {
+            flush(connection)
             controller.commit(connection)
             connection.commitText(text)
             return false
         }
-        controller.input(text, connection)
-        return policy.allowSuggestions
+        if (mode == KeyboardInputMode.JAPANESE_QWERTY) {
+            val converted = romaji.accept(text)
+            if (converted.isNotEmpty()) controller.input(converted, connection)
+        } else {
+            flush(connection)
+            controller.input(text, connection)
+        }
+        return policy.allowSuggestions && controller.composingText.isNotEmpty()
     }
 }
