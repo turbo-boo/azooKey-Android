@@ -18,6 +18,7 @@ class AzooKeyInputMethodService : InputMethodService() {
     private lateinit var candidateCoordinator: CandidateCoordinator
     private var keyboardView: JapaneseFlickKeyboardView? = null
     private var activeEditorInfo: EditorInfo? = null
+    private var inputPolicy = InputFieldPolicy.DEFAULT
 
     override fun onCreate() {
         super.onCreate()
@@ -51,6 +52,7 @@ class AzooKeyInputMethodService : InputMethodService() {
     ) {
         super.onStartInputView(info, restarting)
         activeEditorInfo = info
+        inputPolicy = InputFieldPolicy.from(info)
         keyboardView?.refreshTheme()
         updateEnterKeyPresentation()
     }
@@ -59,6 +61,7 @@ class AzooKeyInputMethodService : InputMethodService() {
     override fun onStartInput(attribute: EditorInfo?, restarting: Boolean) {
         super.onStartInput(attribute, restarting)
         activeEditorInfo = attribute
+        inputPolicy = InputFieldPolicy.from(attribute)
         controller.reset()
         candidateCoordinator.clear()
         updateEnterKeyPresentation()
@@ -68,6 +71,7 @@ class AzooKeyInputMethodService : InputMethodService() {
         controller.reset()
         candidateCoordinator.clear()
         activeEditorInfo = null
+        inputPolicy = InputFieldPolicy.DEFAULT
         updateEnterKeyPresentation()
         super.onFinishInput()
     }
@@ -78,14 +82,20 @@ class AzooKeyInputMethodService : InputMethodService() {
             callbacks = object : JapaneseFlickKeyboardView.Callbacks {
                 override fun onText(text: String) {
                     withEditorConnection { connection ->
-                        controller.input(text, connection)
-                        refreshCandidates()
+                        if (inputPolicy.directInput) {
+                            connection.commitText(text)
+                        } else {
+                            controller.input(text, connection)
+                            refreshCandidates()
+                        }
                     }
                 }
 
                 override fun onCandidate(text: String) {
                     withEditorConnection { connection ->
-                        candidateCoordinator.complete(text)
+                        if (inputPolicy.allowLearning) {
+                            candidateCoordinator.complete(text)
+                        }
                         controller.selectCandidate(text, connection)
                         candidateCoordinator.clear()
                         updateEnterKeyPresentation()
@@ -101,8 +111,10 @@ class AzooKeyInputMethodService : InputMethodService() {
 
                 override fun onChangeCharacterType() {
                     withEditorConnection { connection ->
-                        controller.changeCharacterType(connection)
-                        refreshCandidates()
+                        if (!inputPolicy.directInput) {
+                            controller.changeCharacterType(connection)
+                            refreshCandidates()
+                        }
                     }
                 }
 
@@ -142,7 +154,11 @@ class AzooKeyInputMethodService : InputMethodService() {
         )
         keyboardView = view
         updateEnterKeyPresentation()
-        candidateCoordinator.request(controller.composingText)
+        if (inputPolicy.allowSuggestions) {
+            candidateCoordinator.request(controller.composingText)
+        } else {
+            candidateCoordinator.clear()
+        }
         return view
     }
 
@@ -154,7 +170,11 @@ class AzooKeyInputMethodService : InputMethodService() {
 
     private fun refreshCandidates() {
         updateEnterKeyPresentation()
-        candidateCoordinator.request(controller.composingText)
+        if (inputPolicy.allowSuggestions) {
+            candidateCoordinator.request(controller.composingText)
+        } else {
+            candidateCoordinator.clear()
+        }
     }
 
     private fun updateEnterKeyPresentation() {
