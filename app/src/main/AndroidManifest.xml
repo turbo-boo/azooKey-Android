@@ -15,6 +15,10 @@
         </activity>
 
         <activity
+            android:name=".KeyboardHeightActivity"
+            android:exported="false" />
+
+        <activity
             android:name=".FlickSensitivityActivity"
             android:exported="false" />
 

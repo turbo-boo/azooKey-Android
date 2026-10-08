@@ -22,6 +22,22 @@ class AzooKeyVisualDesignTest {
     }
 
     @Test
+    fun heightScaleChangesVerticalMetricsWithoutChangingHorizontalKeyWidth() {
+        val normal = AzooKeyVisualDesign.phonePortrait(370f, 1f)
+        val tall = AzooKeyVisualDesign.phonePortrait(370f, 1f, heightScale = 1.3f)
+        val short = AzooKeyVisualDesign.phonePortrait(370f, 1f, heightScale = 0.7f)
+
+        assertEquals(normal.keyWidthPx, tall.keyWidthPx, 0.001f)
+        assertEquals(normal.keyWidthPx, short.keyWidthPx, 0.001f)
+        assertEquals((normal.keyboardHeightPx - 12f) * 1.3f + 12f,
+            tall.keyboardHeightPx, 0.001f)
+        assertEquals((normal.keyboardHeightPx - 12f) * 0.7f + 12f,
+            short.keyboardHeightPx, 0.001f)
+        assertEquals(true, short.keyHeightPx < normal.keyHeightPx)
+        assertEquals(true, tall.keyHeightPx > normal.keyHeightPx)
+    }
+
+    @Test
     fun keyAndCandidateShapeConstantsMatchUpstream() {
         assertEquals(6f, AzooKeyVisualDesign.KEY_CORNER_RADIUS_DP, 0f)
         assertEquals(5f, AzooKeyVisualDesign.CANDIDATE_CORNER_RADIUS_DP, 0f)

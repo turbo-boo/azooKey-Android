@@ -63,6 +63,20 @@ class MainActivity : Activity() {
 
         root.addView(
             Button(this).apply {
+                text = getString(R.string.keyboard_height)
+                isAllCaps = false
+                setOnClickListener {
+                    startActivity(Intent(this@MainActivity, KeyboardHeightActivity::class.java))
+                }
+            },
+            ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ),
+        )
+
+        root.addView(
+            Button(this).apply {
                 text = getString(R.string.flick_sensitivity)
                 isAllCaps = false
                 setOnClickListener {

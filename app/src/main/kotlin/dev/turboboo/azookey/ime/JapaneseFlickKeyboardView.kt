@@ -60,6 +60,7 @@ class JapaneseFlickKeyboardView(
     )
 
     private val density = resources.displayMetrics.density
+    private val keyboardHeightStore = KeyboardHeightStore(context)
     private var currentMetrics: AzooKeyVisualDesign.Metrics? = null
     private val candidateRow = LinearLayout(context).apply {
         orientation = HORIZONTAL
@@ -254,6 +255,7 @@ class JapaneseFlickKeyboardView(
             val metrics = AzooKeyVisualDesign.phonePortrait(
                 widthPx = width.toFloat(),
                 density = density,
+                heightScale = keyboardHeightStore.scale(),
             )
             currentMetrics = metrics
             applyMetrics(metrics)

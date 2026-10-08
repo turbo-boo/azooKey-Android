@@ -25,6 +25,10 @@
     <string name="theme_reset">リセットする</string>
     <string name="theme_cancel">キャンセル</string>
     <string name="theme_save">保存</string>
+    <string name="keyboard_height">キーボードの高さ</string>
+    <string name="keyboard_height_description">キーボードの高さを画面幅に対する倍率で変更します。</string>
+    <string name="keyboard_height_value">高さ: %1$d%%</string>
+    <string name="keyboard_height_reset">標準の高さに戻す</string>
     <string name="flick_sensitivity">フリック感度</string>
     <string name="flick_sensitivity_description">感度を高くすると、短い指の移動でもフリックとして認識されます。</string>
     <string name="flick_sensitivity_value">感度: %1$d%%</string>

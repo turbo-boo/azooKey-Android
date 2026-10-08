@@ -65,12 +65,14 @@ internal object AzooKeyVisualDesign {
     fun phonePortrait(
         widthPx: Float,
         density: Float,
+        heightScale: Float = 1f,
     ): Metrics {
         require(widthPx > 0f)
         require(density > 0f)
+        require(heightScale in 0.7f..1.4f)
 
         val fixedPadding = KEYBOARD_VERTICAL_PADDING_DP * density
-        val keyboardHeight = (51f / 74f) * widthPx + fixedPadding
+        val keyboardHeight = (51f / 74f) * widthPx * heightScale + fixedPadding
         val keyboardBarHeight = (keyboardHeight - fixedPadding) * 37f / 204f
         val candidateButtonHeight = keyboardBarHeight * 0.6f
 
