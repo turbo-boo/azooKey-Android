@@ -419,6 +419,7 @@ class ThemeSettingsActivity : Activity() {
                     override fun onSpace() = Unit
                     override fun onEnter() = Unit
                     override fun onNextKeyboard() = Unit
+                    override fun onKeyboardModeChanged(mode: dev.turboboo.azookey.ime.KeyboardInputMode) = Unit
                 },
             ).apply {
                 setCandidates(listOf("変換", "候補", "予測"))
