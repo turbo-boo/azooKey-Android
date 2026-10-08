@@ -1,6 +1,9 @@
 package dev.turboboo.azookey.ime
 
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.pm.ApplicationInfo
+import android.view.KeyEvent
 import android.inputmethodservice.InputMethodService
 import android.os.Build
 import android.os.Handler
@@ -169,6 +172,36 @@ class AzooKeyInputMethodService : InputMethodService() {
                     withEditorConnection { connection ->
                         inputRouter.flush(connection)
                         controller.commit(connection)
+                    }
+                    candidateCoordinator.clear()
+                    updateEnterKeyPresentation()
+                }
+
+                override fun onMoveCursor(direction: Int) {
+                    val connection = currentInputConnection ?: return
+                    withEditorConnection { editor ->
+                        inputRouter.flush(editor)
+                        controller.commit(editor)
+                    }
+                    candidateCoordinator.clear()
+                    val keyCode =
+                        if (direction < 0) KeyEvent.KEYCODE_DPAD_LEFT
+                        else KeyEvent.KEYCODE_DPAD_RIGHT
+                    connection.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, keyCode))
+                    connection.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, keyCode))
+                    updateEnterKeyPresentation()
+                }
+
+                override fun onPaste() {
+                    val clip = (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
+                        .primaryClip ?: return
+                    val text = clip.getItemAt(0).coerceToText(this@AzooKeyInputMethodService)
+                        ?.toString() ?: return
+                    if (text.isEmpty()) return
+                    withEditorConnection { editor ->
+                        inputRouter.flush(editor)
+                        controller.commit(editor)
+                        editor.commitText(text)
                     }
                     candidateCoordinator.clear()
                     updateEnterKeyPresentation()

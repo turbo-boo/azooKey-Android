@@ -264,6 +264,17 @@ class JapaneseFlickKeyboardViewTest {
         assertEquals(KeyboardInputMode.LATIN, view.inputMode)
     }
 
+    @Test
+    fun candidateBarExposesCursorAndPasteActions() {
+        val callbacks = RecordingCallbacks()
+        val view = createView(callbacks)
+        findButton(view, "←").performClick()
+        findButton(view, "→").performClick()
+        findButton(view, "貼付").performClick()
+        assertEquals(listOf(-1, 1), callbacks.moved)
+        assertEquals(1, callbacks.pasteCount)
+    }
+
     private fun createView(callbacks: RecordingCallbacks): JapaneseFlickKeyboardView {
         val context: Context = RuntimeEnvironment.getApplication()
         return JapaneseFlickKeyboardView(context, callbacks)
@@ -361,6 +372,10 @@ class JapaneseFlickKeyboardViewTest {
 
         val modeChanges = mutableListOf<KeyboardInputMode>()
 
+        val moved = mutableListOf<Int>()
+        var pasteCount = 0
+        override fun onMoveCursor(direction: Int) { moved += direction }
+        override fun onPaste() { pasteCount++ }
         override fun onNextKeyboard() = Unit
 
         override fun onKeyboardModeChanged(mode: KeyboardInputMode) {

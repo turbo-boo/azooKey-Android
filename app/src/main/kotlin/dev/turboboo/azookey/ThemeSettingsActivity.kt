@@ -419,6 +419,8 @@ class ThemeSettingsActivity : Activity() {
                     override fun onSpace() = Unit
                     override fun onEnter() = Unit
                     override fun onNextKeyboard() = Unit
+                    override fun onMoveCursor(direction: Int) = Unit
+                    override fun onPaste() = Unit
                     override fun onKeyboardModeChanged(mode: dev.turboboo.azookey.ime.KeyboardInputMode) = Unit
                 },
             ).apply {

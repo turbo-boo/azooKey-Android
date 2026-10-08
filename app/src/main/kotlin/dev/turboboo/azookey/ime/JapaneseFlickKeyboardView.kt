@@ -51,6 +51,8 @@ class JapaneseFlickKeyboardView(
         fun onEnter()
         fun onNextKeyboard()
         fun onKeyboardModeChanged(mode: KeyboardInputMode)
+        fun onMoveCursor(direction: Int)
+        fun onPaste()
     }
 
     private data class KeyCell(
@@ -111,6 +113,12 @@ class JapaneseFlickKeyboardView(
             qwertyToggle,
             LayoutParams(dp(48), candidateButtonHeight()),
         )
+        addView(actionButton("←") { callbacks.onMoveCursor(-1) },
+            LayoutParams(dp(33), candidateButtonHeight()))
+        addView(actionButton("→") { callbacks.onMoveCursor(1) },
+            LayoutParams(dp(33), candidateButtonHeight()))
+        addView(actionButton("貼付", callbacks::onPaste),
+            LayoutParams(dp(42), candidateButtonHeight()))
         addView(
             expandCandidatesButton,
             LayoutParams(
@@ -242,6 +250,19 @@ class JapaneseFlickKeyboardView(
             setCandidatesExpanded(false)
         }
     }
+
+    private fun actionButton(label: String, action: () -> Unit): Button =
+        Button(context).apply {
+            text = label
+            isAllCaps = false
+            gravity = Gravity.CENTER
+            setPadding(0, 0, 0, 0)
+            AzooKeyViewStyle.styleCandidate(this)
+            setOnClickListener {
+                performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                action()
+            }
+        }
 
     private fun createCandidateButton(
         candidate: String,
