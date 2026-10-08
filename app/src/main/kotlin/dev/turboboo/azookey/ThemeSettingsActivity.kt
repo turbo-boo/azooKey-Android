@@ -1,6 +1,7 @@
 package dev.turboboo.azookey
 
-import android.app.Activity
+import androidx.activity.ComponentActivity
+import androidx.activity.OnBackPressedCallback
 import android.app.AlertDialog
 import android.content.Intent
 import android.content.res.ColorStateList
@@ -21,7 +22,7 @@ import dev.turboboo.azookey.ime.JapaneseFlickKeyboardView
 import dev.turboboo.azookey.ime.KeyboardTheme
 import dev.turboboo.azookey.ime.KeyboardThemeStore
 
-class ThemeSettingsActivity : Activity() {
+class ThemeSettingsActivity : ComponentActivity() {
     private lateinit var store: KeyboardThemeStore
     private lateinit var originalTheme: KeyboardTheme
     private lateinit var draft: KeyboardTheme
@@ -36,6 +37,14 @@ class ThemeSettingsActivity : Activity() {
         store = KeyboardThemeStore(this)
         originalTheme = store.load()
         draft = originalTheme
+        onBackPressedDispatcher.addCallback(
+            this,
+            object : OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() {
+                    cancelEditing()
+                }
+            },
+        )
         setContentView(buildContent())
         renderPreview()
     }
@@ -602,11 +611,6 @@ class ThemeSettingsActivity : Activity() {
     private fun cancelEditing() {
         store.save(originalTheme)
         finish()
-    }
-
-    @Deprecated("Deprecated in Android")
-    override fun onBackPressed() {
-        cancelEditing()
     }
 
     private fun matchWrap(): ViewGroup.LayoutParams =

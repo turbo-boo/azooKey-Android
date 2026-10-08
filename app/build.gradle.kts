@@ -70,6 +70,7 @@ tasks.named("preBuild").configure {
 dependencies {
     implementation(project(":core"))
     implementation(project(":converter-swift"))
+    implementation("androidx.activity:activity:1.10.1")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.17")
 }
