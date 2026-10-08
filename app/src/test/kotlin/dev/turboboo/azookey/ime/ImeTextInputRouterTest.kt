@@ -89,4 +89,49 @@ class ImeTextInputRouterTest {
         assertFalse(router.input("", KeyboardInputMode.LATIN, InputFieldPolicy.DEFAULT, connection))
         assertEquals(emptyList<String>(), connection.calls)
     }
+    @Test fun japaneseQwertyConvertsRomajiToKana() {
+        val controller = ImeController()
+        val connection = RecordingConnection()
+        val router = ImeTextInputRouter(controller)
+        for (ch in "kanji") {
+            router.input(ch.toString(), KeyboardInputMode.JAPANESE_QWERTY, InputFieldPolicy.DEFAULT, connection)
+        }
+        assertEquals("かんじ", controller.composingText)
+    }
+
+    @Test fun latinQwertyCommitsLiteralText() {
+        val connection = RecordingConnection()
+        val router = ImeTextInputRouter(ImeController())
+        assertFalse(router.input("A", KeyboardInputMode.LATIN_QWERTY, InputFieldPolicy.DEFAULT, connection))
+        assertEquals(listOf("commit:A"), connection.calls)
+    }
+
+    @Test fun pendingRomajiIsDeletedBeforeVisibleText() {
+        val connection = RecordingConnection()
+        val controller = ImeController()
+        val router = ImeTextInputRouter(controller)
+        router.input("k", KeyboardInputMode.JAPANESE_QWERTY, InputFieldPolicy.DEFAULT, connection)
+        router.backspace(connection)
+        assertEquals(emptyList<String>(), connection.calls)
+        assertEquals(false, router.hasPendingRomaji)
+    }
+
+    @Test fun flushEmitsTrailingNOnCommit() {
+        val connection = RecordingConnection()
+        val controller = ImeController()
+        val router = ImeTextInputRouter(controller)
+        router.input("kan", KeyboardInputMode.JAPANESE_QWERTY, InputFieldPolicy.DEFAULT, connection)
+        router.flush(connection)
+        controller.commit(connection)
+        assertEquals(listOf("compose:か", "compose:かん", "commit:かん"), connection.calls)
+    }
+
+    @Test fun resetDropsUnfinishedRomajiAcrossEditors() {
+        val connection = RecordingConnection()
+        val router = ImeTextInputRouter(ImeController())
+        router.input("k", KeyboardInputMode.JAPANESE_QWERTY, InputFieldPolicy.DEFAULT, connection)
+        router.reset()
+        assertFalse(router.hasPendingRomaji)
+    }
+
 }

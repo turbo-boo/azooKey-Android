@@ -69,12 +69,14 @@ class AzooKeyInputMethodService : InputMethodService() {
         activeEditorInfo = attribute
         inputPolicy = InputFieldPolicy.from(attribute)
         controller.reset()
+        inputRouter.reset()
         candidateCoordinator.clear()
         updateEnterKeyPresentation()
     }
 
     override fun onFinishInput() {
         controller.reset()
+        inputRouter.reset()
         candidateCoordinator.clear()
         activeEditorInfo = null
         inputPolicy = InputFieldPolicy.DEFAULT
@@ -105,7 +107,10 @@ class AzooKeyInputMethodService : InputMethodService() {
 
                 override fun onCandidate(text: String) {
                     if (!inputPolicy.allowSuggestions ||
-                        keyboardView?.inputMode != KeyboardInputMode.HIRAGANA ||
+                        keyboardView?.inputMode !in listOf(
+                            KeyboardInputMode.HIRAGANA,
+                            KeyboardInputMode.JAPANESE_QWERTY,
+                        ) ||
                         controller.composingText.isEmpty()
                     ) {
                         return
@@ -122,7 +127,7 @@ class AzooKeyInputMethodService : InputMethodService() {
 
                 override fun onDelete() {
                     withEditorConnection { connection ->
-                        controller.backspace(connection)
+                        inputRouter.backspace(connection)
                         refreshCandidates()
                     }
                 }
@@ -138,6 +143,7 @@ class AzooKeyInputMethodService : InputMethodService() {
 
                 override fun onSpace() {
                     withEditorConnection { connection ->
+                        inputRouter.flush(connection)
                         controller.space(connection)
                         candidateCoordinator.clear()
                         updateEnterKeyPresentation()
@@ -146,7 +152,9 @@ class AzooKeyInputMethodService : InputMethodService() {
 
                 override fun onEnter() {
                     withEditorConnection { connection ->
-                        val hadComposition = controller.composingText.isNotEmpty()
+                        val hadComposition =
+                            controller.composingText.isNotEmpty() || inputRouter.hasPendingRomaji
+                        inputRouter.flush(connection)
                         controller.commit(connection)
                         candidateCoordinator.clear()
                         updateEnterKeyPresentation()
@@ -159,6 +167,7 @@ class AzooKeyInputMethodService : InputMethodService() {
 
                 override fun onKeyboardModeChanged(mode: KeyboardInputMode) {
                     withEditorConnection { connection ->
+                        inputRouter.flush(connection)
                         controller.commit(connection)
                     }
                     candidateCoordinator.clear()
@@ -181,7 +190,10 @@ class AzooKeyInputMethodService : InputMethodService() {
         keyboardView = view
         updateEnterKeyPresentation()
         if (inputPolicy.allowSuggestions &&
-            keyboardView?.inputMode == KeyboardInputMode.HIRAGANA
+            keyboardView?.inputMode in listOf(
+                KeyboardInputMode.HIRAGANA,
+                KeyboardInputMode.JAPANESE_QWERTY,
+            )
         ) {
             candidateCoordinator.request(controller.composingText)
         } else {
@@ -199,7 +211,10 @@ class AzooKeyInputMethodService : InputMethodService() {
     private fun refreshCandidates() {
         updateEnterKeyPresentation()
         if (inputPolicy.allowSuggestions &&
-            keyboardView?.inputMode == KeyboardInputMode.HIRAGANA
+            keyboardView?.inputMode in listOf(
+                KeyboardInputMode.HIRAGANA,
+                KeyboardInputMode.JAPANESE_QWERTY,
+            )
         ) {
             candidateCoordinator.request(controller.composingText)
         } else {
