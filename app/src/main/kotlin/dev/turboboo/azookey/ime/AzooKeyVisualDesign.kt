@@ -8,7 +8,7 @@ package dev.turboboo.azookey.ime
  *   AzooKeyCore/Sources/KeyboardViews/Design.swift
  *   AzooKeyCore/Sources/KeyboardViews/View/Components/KeyBackground.swift
  *   AzooKeyCore/Sources/KeyboardViews/View/KeyboardBar/ResultBar.swift
- *   Resources/Designs.xcassets/*.colorset/Contents.json
+ *   Resources/Designs.xcassets/(color asset)/Contents.json
  * Original implementation author: Keita Miwa (ensan) and azooKey contributors
  *
  * Licensed under the MIT License. See THIRD_PARTY_NOTICES.md.
