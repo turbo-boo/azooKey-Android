@@ -11,6 +11,7 @@ internal data class InputFieldPolicy(
     val directInput: Boolean,
     val allowSuggestions: Boolean,
     val allowLearning: Boolean,
+    val preferredMode: KeyboardInputMode? = null,
 ) {
     companion object {
         val DEFAULT = InputFieldPolicy(
@@ -39,6 +40,37 @@ internal data class InputFieldPolicy(
                     directInput = true,
                     allowSuggestions = false,
                     allowLearning = false,
+                    preferredMode = KeyboardInputMode.LATIN,
+                )
+            }
+
+            // Numeric, telephone and date editors should not run the Japanese
+            // dictionary or learn their literal contents.
+            if (
+                klass == InputType.TYPE_CLASS_NUMBER ||
+                klass == InputType.TYPE_CLASS_PHONE ||
+                klass == InputType.TYPE_CLASS_DATETIME
+            ) {
+                return InputFieldPolicy(
+                    directInput = true,
+                    allowSuggestions = false,
+                    allowLearning = false,
+                    preferredMode = KeyboardInputMode.NUMBER_SYMBOLS,
+                )
+            }
+
+            val latinTextField = klass == InputType.TYPE_CLASS_TEXT &&
+                variation in setOf(
+                    InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS,
+                    InputType.TYPE_TEXT_VARIATION_WEB_EMAIL_ADDRESS,
+                    InputType.TYPE_TEXT_VARIATION_URI,
+                )
+            if (latinTextField) {
+                return InputFieldPolicy(
+                    directInput = true,
+                    allowSuggestions = false,
+                    allowLearning = false,
+                    preferredMode = KeyboardInputMode.LATIN,
                 )
             }
 

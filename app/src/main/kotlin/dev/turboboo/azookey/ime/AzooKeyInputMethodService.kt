@@ -52,9 +52,14 @@ class AzooKeyInputMethodService : InputMethodService() {
         restarting: Boolean,
     ) {
         super.onStartInputView(info, restarting)
-        activeEditorInfo = info
-        inputPolicy = InputFieldPolicy.from(info)
+        activeEditorInfo = info ?: activeEditorInfo
+        inputPolicy = InputFieldPolicy.from(activeEditorInfo)
         keyboardView?.refreshTheme()
+        if (!restarting) {
+            keyboardView?.selectInputMode(
+                inputPolicy.preferredMode ?: KeyboardInputMode.HIRAGANA,
+            )
+        }
         updateEnterKeyPresentation()
     }
 
@@ -99,6 +104,12 @@ class AzooKeyInputMethodService : InputMethodService() {
                 }
 
                 override fun onCandidate(text: String) {
+                    if (!inputPolicy.allowSuggestions ||
+                        keyboardView?.inputMode != KeyboardInputMode.HIRAGANA ||
+                        controller.composingText.isEmpty()
+                    ) {
+                        return
+                    }
                     withEditorConnection { connection ->
                         if (inputPolicy.allowLearning) {
                             candidateCoordinator.complete(text)

@@ -46,6 +46,32 @@ class CandidateCoordinatorTest {
     }
 
     @Test
+    fun supersededQueuedRequestsDoNotInvokeExpensiveConverter() {
+        val worker = QueuedExecutor()
+        val main = QueuedExecutor()
+        val conversions = mutableListOf<String>()
+        val published = mutableListOf<List<String>>()
+        val coordinator = CandidateCoordinator(
+            provider = CandidateProvider { input ->
+                conversions += input
+                listOf("candidate-$input")
+            },
+            workerExecutor = worker,
+            mainExecutor = main,
+            onCandidates = published::add,
+        )
+
+        coordinator.request("か")
+        coordinator.request("かな")
+        coordinator.request("かなじ")
+        worker.runAll()
+        main.runAll()
+
+        assertEquals(listOf("かなじ"), conversions)
+        assertEquals(listOf(listOf("candidate-かなじ")), published)
+    }
+
+    @Test
     fun emptyInputClearsCandidatesWithoutCallingProvider() {
         var providerCalls = 0
         val published = mutableListOf<List<String>>()

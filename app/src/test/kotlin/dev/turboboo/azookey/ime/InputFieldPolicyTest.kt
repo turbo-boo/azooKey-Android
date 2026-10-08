@@ -29,6 +29,7 @@ class InputFieldPolicyTest {
             assertTrue(policy.directInput)
             assertFalse(policy.allowSuggestions)
             assertFalse(policy.allowLearning)
+            assertEquals(KeyboardInputMode.LATIN, policy.preferredMode)
         }
     }
 
@@ -49,7 +50,32 @@ class InputFieldPolicyTest {
         assertFalse(policy.allowLearning)
     }
 
-    @Test fun numberInputIsNotMistakenForPassword() {
-        assertEquals(InputFieldPolicy.DEFAULT, InputFieldPolicy.from(editor(InputType.TYPE_CLASS_NUMBER)))
+    @Test fun numericAndPhoneEditorsUseLiteralInputWithoutConversion() {
+        val types = listOf(
+            InputType.TYPE_CLASS_NUMBER,
+            InputType.TYPE_CLASS_PHONE,
+            InputType.TYPE_CLASS_DATETIME,
+        )
+        types.forEach { type ->
+            val policy = InputFieldPolicy.from(editor(type))
+            assertTrue(policy.directInput)
+            assertFalse(policy.allowSuggestions)
+            assertFalse(policy.allowLearning)
+            assertEquals(KeyboardInputMode.NUMBER_SYMBOLS, policy.preferredMode)
+        }
+    }
+
+    @Test fun emailAndUriEditorsDefaultToLatinDirectInput() {
+        val variations = listOf(
+            InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS,
+            InputType.TYPE_TEXT_VARIATION_WEB_EMAIL_ADDRESS,
+            InputType.TYPE_TEXT_VARIATION_URI,
+        )
+        variations.forEach { variation ->
+            val policy = InputFieldPolicy.from(editor(InputType.TYPE_CLASS_TEXT or variation))
+            assertTrue(policy.directInput)
+            assertFalse(policy.allowLearning)
+            assertEquals(KeyboardInputMode.LATIN, policy.preferredMode)
+        }
     }
 }

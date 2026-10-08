@@ -138,6 +138,10 @@ class JapaneseFlickKeyboardView(
         addView(expandedCandidateArea)
     }
 
+    fun selectInputMode(mode: KeyboardInputMode) {
+        switchKeyboardMode(mode)
+    }
+
     fun refreshTheme() {
         val theme = AzooKeyViewStyle.theme(context)
         background = KeyboardThemeBackgroundDrawable(

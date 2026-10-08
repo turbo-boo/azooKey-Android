@@ -207,6 +207,24 @@ class JapaneseFlickKeyboardViewTest {
     }
 
     @Test
+    fun programmaticModeSelectionRefreshesTheKeyboard() {
+        val callbacks = RecordingCallbacks()
+        val view = createView(callbacks)
+
+        view.selectInputMode(KeyboardInputMode.NUMBER_SYMBOLS)
+        assertEquals(KeyboardInputMode.NUMBER_SYMBOLS, view.inputMode)
+        findButton(view, "1☆♪→").performClick()
+        view.selectInputMode(KeyboardInputMode.HIRAGANA)
+        findButton(view, "あ").performClick()
+
+        assertEquals(listOf("1", "あ"), callbacks.textInputs)
+        assertEquals(
+            listOf(KeyboardInputMode.NUMBER_SYMBOLS, KeyboardInputMode.HIRAGANA),
+            callbacks.modeChanges,
+        )
+    }
+
+    @Test
     fun switchingModesReportsModeAndDoesNotReportRepeatedSelection() {
         val callbacks = RecordingCallbacks()
         val view = createView(callbacks)

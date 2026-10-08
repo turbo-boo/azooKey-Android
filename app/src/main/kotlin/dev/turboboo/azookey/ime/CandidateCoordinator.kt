@@ -31,6 +31,11 @@ class CandidateCoordinator(
         }
 
         workerExecutor.execute {
+            // Typing can outrun the native converter. Do not spend native work
+            // on queued generations whose results cannot be displayed.
+            if (generation.get() != requestGeneration) {
+                return@execute
+            }
             val candidates = runCatching {
                 provider.candidates(input)
             }.getOrDefault(emptyList())
