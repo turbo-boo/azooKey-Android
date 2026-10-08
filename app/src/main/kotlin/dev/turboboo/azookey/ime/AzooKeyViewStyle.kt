@@ -84,7 +84,7 @@ internal object AzooKeyViewStyle {
         button.minimumHeight = 0
         button.includeFontPadding = false
         button.typeface = Typeface.create(
-            "sans-serif",
+            Typeface.create("sans-serif", Typeface.NORMAL),
             fontWeight * 100,
             false,
         )
