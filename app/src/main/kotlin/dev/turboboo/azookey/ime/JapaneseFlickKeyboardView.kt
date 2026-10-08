@@ -79,6 +79,22 @@ class JapaneseFlickKeyboardView(
             setCandidatesExpanded(!candidatesExpanded)
         }
     }
+    private val qwertyToggle = Button(context).apply {
+        text = "QW"
+        contentDescription = "QWERTY入力へ切替"
+        gravity = Gravity.CENTER
+        AzooKeyViewStyle.styleCandidate(this)
+        setOnClickListener {
+            val next = when (keyboardMode) {
+                KeyboardInputMode.HIRAGANA, KeyboardInputMode.NUMBER_SYMBOLS ->
+                    KeyboardInputMode.JAPANESE_QWERTY
+                KeyboardInputMode.LATIN -> KeyboardInputMode.LATIN_QWERTY
+                KeyboardInputMode.JAPANESE_QWERTY -> KeyboardInputMode.HIRAGANA
+                KeyboardInputMode.LATIN_QWERTY -> KeyboardInputMode.LATIN
+            }
+            switchKeyboardMode(next)
+        }
+    }
     private val candidateBar = LinearLayout(context).apply {
         orientation = HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
@@ -90,6 +106,10 @@ class JapaneseFlickKeyboardView(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 1f,
             ),
+        )
+        addView(
+            qwertyToggle,
+            LayoutParams(dp(48), candidateButtonHeight()),
         )
         addView(
             expandCandidatesButton,
@@ -125,6 +145,14 @@ class JapaneseFlickKeyboardView(
         get() = keyboardMode
     private var latinUppercase = false
     private var enterKeyLabel = "改行"
+    private val qwertyPanel = QwertyKeyboardPanel(
+        context = context,
+        onText = callbacks::onText,
+        onDelete = callbacks::onDelete,
+        onSpace = callbacks::onSpace,
+        onEnter = callbacks::onEnter,
+        onModeChange = ::switchKeyboardMode,
+    ).apply { visibility = GONE }
 
     init {
         orientation = VERTICAL
@@ -136,6 +164,7 @@ class JapaneseFlickKeyboardView(
 
         addView(candidateBar)
         addView(createGrid().also { currentGrid = it })
+        addView(qwertyPanel)
         addView(expandedCandidateArea)
     }
 
@@ -153,6 +182,7 @@ class JapaneseFlickKeyboardView(
         candidateArea.setBackgroundColor(theme.resultBackgroundColor)
         expandedCandidateArea.setBackgroundColor(theme.resultBackgroundColor)
         expandedCandidateFlow.refreshStyle()
+        qwertyPanel.refreshTheme()
         AzooKeyViewStyle.styleCandidate(expandCandidatesButton)
 
         replaceGrid()
@@ -165,6 +195,7 @@ class JapaneseFlickKeyboardView(
             return
         }
         enterKeyLabel = label
+        qwertyPanel.setEnterLabel(label)
         replaceGrid()
     }
 
@@ -234,12 +265,14 @@ class JapaneseFlickKeyboardView(
         if (candidatesExpanded) {
             candidateArea.visibility = INVISIBLE
             currentGrid?.visibility = GONE
+            qwertyPanel.visibility = GONE
             expandedCandidateArea.visibility = VISIBLE
             expandCandidatesButton.text = "⌃"
             expandCandidatesButton.contentDescription = "候補を閉じる"
         } else {
             candidateArea.visibility = VISIBLE
-            currentGrid?.visibility = VISIBLE
+            currentGrid?.visibility = if (keyboardMode.isQwerty) GONE else VISIBLE
+            qwertyPanel.visibility = if (keyboardMode.isQwerty) VISIBLE else GONE
             expandedCandidateArea.visibility = GONE
             expandCandidatesButton.text = "⌄"
             expandCandidatesButton.contentDescription = "候補を展開"
@@ -309,6 +342,10 @@ class JapaneseFlickKeyboardView(
         )
         candidateBar.setPadding(0, dp(6), 0, dp(6))
 
+        val toggleParams =
+            qwertyToggle.layoutParams as LinearLayout.LayoutParams
+        toggleParams.height = metrics.candidateButtonHeightPx.roundToInt()
+        qwertyToggle.layoutParams = toggleParams
         val expandParams =
             expandCandidatesButton.layoutParams as LinearLayout.LayoutParams
         expandParams.width = (metrics.keyboardBarHeightPx * 0.5f).roundToInt()
@@ -330,6 +367,10 @@ class JapaneseFlickKeyboardView(
             gridHeight,
         )
         grid.layoutParams = LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            gridHeight,
+        )
+        qwertyPanel.layoutParams = LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             gridHeight,
         )
@@ -372,6 +413,8 @@ class JapaneseFlickKeyboardView(
                 KeyboardInputMode.HIRAGANA -> addHiraganaKeys()
                 KeyboardInputMode.LATIN -> addLatinKeys()
                 KeyboardInputMode.NUMBER_SYMBOLS -> addNumberSymbolKeys()
+                KeyboardInputMode.JAPANESE_QWERTY -> addHiraganaKeys()
+                KeyboardInputMode.LATIN_QWERTY -> addLatinKeys()
             }
             addEditorKeys()
         }
@@ -493,7 +536,12 @@ class JapaneseFlickKeyboardView(
 
         keyboardMode = mode
         callbacks.onKeyboardModeChanged(mode)
+        qwertyPanel.setMode(mode)
+        qwertyToggle.text = if (mode.isQwerty) "フリック" else "QW"
+        qwertyToggle.contentDescription =
+            if (mode.isQwerty) "フリック入力へ切替" else "QWERTY入力へ切替"
         replaceGrid()
+        setCandidatesExpanded(false)
     }
 
     private fun toggleLatinCase() {

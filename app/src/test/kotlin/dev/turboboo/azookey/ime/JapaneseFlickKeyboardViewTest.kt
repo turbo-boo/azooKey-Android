@@ -246,6 +246,24 @@ class JapaneseFlickKeyboardViewTest {
         assertEquals(KeyboardInputMode.HIRAGANA, view.inputMode)
     }
 
+    @Test
+    fun qwertyPanelProducesLatinKeysAndReturnsToFlick() {
+        val callbacks = RecordingCallbacks()
+        val view = createView(callbacks)
+
+        findButton(view, "QW").performClick()
+        assertEquals(KeyboardInputMode.JAPANESE_QWERTY, view.inputMode)
+        findButton(view, "q").performClick()
+        assertEquals(listOf("q"), callbacks.textInputs)
+        findButton(view, "英").performClick()
+        assertEquals(KeyboardInputMode.LATIN_QWERTY, view.inputMode)
+        findButton(view, "⇧").performClick()
+        findButton(view, "Q").performClick()
+        assertEquals(listOf("q", "Q"), callbacks.textInputs)
+        findButton(view, "フリック").performClick()
+        assertEquals(KeyboardInputMode.LATIN, view.inputMode)
+    }
+
     private fun createView(callbacks: RecordingCallbacks): JapaneseFlickKeyboardView {
         val context: Context = RuntimeEnvironment.getApplication()
         return JapaneseFlickKeyboardView(context, callbacks)
