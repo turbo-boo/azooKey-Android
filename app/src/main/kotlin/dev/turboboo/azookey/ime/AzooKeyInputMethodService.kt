@@ -109,6 +109,11 @@ class AzooKeyInputMethodService : InputMethodService() {
                 }
 
                 override fun onCandidate(text: String) {
+                    if (inputRouter.hasPendingRomaji) {
+                        withEditorConnection { editor -> inputRouter.flush(editor) }
+                        refreshCandidates()
+                        return
+                    }
                     if (!inputPolicy.allowSuggestions ||
                         keyboardView?.inputMode !in listOf(
                             KeyboardInputMode.HIRAGANA,

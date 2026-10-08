@@ -44,6 +44,15 @@ class AuxiliaryCandidateProviderTest {
         )
     }
 
+    @Test fun supplementaryCandidatesAreReachableWithTenSwiftResults() {
+        val swift = (1..10).map { "候補$it" }
+        val merged = appendAuxiliaryCandidates(swift, "きょう", extras = provider)
+        assertEquals(10, merged.size)
+        assertEquals("候補1", merged.first())
+        assertEquals(true, "2026/10/08" in merged)
+        assertEquals(true, "2026年10月8日" in merged)
+    }
+
     @Test fun supportsBasicEmojiSuggestions() {
         assertFalse(provider.candidates("ねこ").isEmpty())
         assertEquals("❤️", provider.candidates("はーと").first())

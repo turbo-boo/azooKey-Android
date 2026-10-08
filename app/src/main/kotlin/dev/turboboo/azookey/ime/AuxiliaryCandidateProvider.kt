@@ -53,7 +53,11 @@ internal fun appendAuxiliaryCandidates(
     limit: Int = 10,
 ): List<String> {
     if (limit <= 0) return emptyList()
-    return (main + extras.candidates(input))
+    val additional = extras.candidates(input).filter(String::isNotBlank).distinct()
+    if (additional.isEmpty()) return main.filter(String::isNotBlank).distinct().take(limit)
+    val reserved = minOf(3, additional.size, limit)
+    val leading = main.filter(String::isNotBlank).distinct().take(limit - reserved)
+    return (leading + additional + main)
         .filter(String::isNotBlank)
         .distinct()
         .take(limit)
