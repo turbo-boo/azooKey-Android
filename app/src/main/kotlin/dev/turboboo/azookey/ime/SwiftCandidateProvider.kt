@@ -75,11 +75,14 @@ internal class SwiftCandidateProvider(
         val dictionaryPath = dictionaryDirectory.absolutePath
         if (!userDictionarySynchronizer.sync(dictionaryPath)) {
             stablePredictionCache.clear()
-            return parseCandidateJson(
-                AzooKeyAndroidJNI.candidatesJSON(
-                    input,
-                    dictionaryPath,
+            return appendAuxiliaryCandidates(
+                parseCandidateJson(
+                    AzooKeyAndroidJNI.candidatesJSON(
+                        input,
+                        dictionaryPath,
+                    ),
                 ),
+                input,
             )
         }
 
@@ -140,7 +143,7 @@ internal class SwiftCandidateProvider(
                 predictionPathJson = diagnostics.pathJson,
             )
         }
-        return candidates
+        return appendAuxiliaryCandidates(candidates, input)
     }
 
     override fun complete(candidate: String) {
