@@ -50,12 +50,7 @@ class JapaneseFlickKeyboardView(
         fun onSpace()
         fun onEnter()
         fun onNextKeyboard()
-    }
-
-    private enum class KeyboardMode {
-        HIRAGANA,
-        LATIN,
-        NUMBER_SYMBOLS,
+        fun onKeyboardModeChanged(mode: KeyboardInputMode)
     }
 
     private data class KeyCell(
@@ -124,7 +119,9 @@ class JapaneseFlickKeyboardView(
     private var currentGrid: GridLayout? = null
     private var currentCandidates: List<String> = emptyList()
     private var candidatesExpanded = false
-    private var keyboardMode = KeyboardMode.HIRAGANA
+    private var keyboardMode = KeyboardInputMode.HIRAGANA
+    val inputMode: KeyboardInputMode
+        get() = keyboardMode
     private var latinUppercase = false
     private var enterKeyLabel = "改行"
 
@@ -366,9 +363,9 @@ class JapaneseFlickKeyboardView(
 
             addModeKeys()
             when (keyboardMode) {
-                KeyboardMode.HIRAGANA -> addHiraganaKeys()
-                KeyboardMode.LATIN -> addLatinKeys()
-                KeyboardMode.NUMBER_SYMBOLS -> addNumberSymbolKeys()
+                KeyboardInputMode.HIRAGANA -> addHiraganaKeys()
+                KeyboardInputMode.LATIN -> addLatinKeys()
+                KeyboardInputMode.NUMBER_SYMBOLS -> addNumberSymbolKeys()
             }
             addEditorKeys()
         }
@@ -378,22 +375,22 @@ class JapaneseFlickKeyboardView(
             label = "☆123",
             row = 0,
             column = 0,
-            selected = keyboardMode == KeyboardMode.NUMBER_SYMBOLS,
-            onClick = { switchKeyboardMode(KeyboardMode.NUMBER_SYMBOLS) },
+            selected = keyboardMode == KeyboardInputMode.NUMBER_SYMBOLS,
+            onClick = { switchKeyboardMode(KeyboardInputMode.NUMBER_SYMBOLS) },
         )
         addSpecialKey(
             label = "ABC",
             row = 1,
             column = 0,
-            selected = keyboardMode == KeyboardMode.LATIN,
-            onClick = { switchKeyboardMode(KeyboardMode.LATIN) },
+            selected = keyboardMode == KeyboardInputMode.LATIN,
+            onClick = { switchKeyboardMode(KeyboardInputMode.LATIN) },
         )
         addSpecialKey(
             label = "あいう",
             row = 2,
             column = 0,
-            selected = keyboardMode == KeyboardMode.HIRAGANA,
-            onClick = { switchKeyboardMode(KeyboardMode.HIRAGANA) },
+            selected = keyboardMode == KeyboardInputMode.HIRAGANA,
+            onClick = { switchKeyboardMode(KeyboardInputMode.HIRAGANA) },
         )
         addSpecialKey("🌐", row = 3, column = 0, onClick = callbacks::onNextKeyboard)
     }
@@ -483,12 +480,13 @@ class JapaneseFlickKeyboardView(
         )
     }
 
-    private fun switchKeyboardMode(mode: KeyboardMode) {
+    private fun switchKeyboardMode(mode: KeyboardInputMode) {
         if (keyboardMode == mode) {
             return
         }
 
         keyboardMode = mode
+        callbacks.onKeyboardModeChanged(mode)
         replaceGrid()
     }
 

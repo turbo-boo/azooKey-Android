@@ -206,6 +206,28 @@ class JapaneseFlickKeyboardViewTest {
         assertEquals(listOf("あ"), callbacks.textInputs)
     }
 
+    @Test
+    fun switchingModesReportsModeAndDoesNotReportRepeatedSelection() {
+        val callbacks = RecordingCallbacks()
+        val view = createView(callbacks)
+
+        assertEquals(KeyboardInputMode.HIRAGANA, view.inputMode)
+        findButton(view, "ABC").performClick()
+        findButton(view, "ABC").performClick()
+        findButton(view, "☆123").performClick()
+        findButton(view, "あいう").performClick()
+
+        assertEquals(
+            listOf(
+                KeyboardInputMode.LATIN,
+                KeyboardInputMode.NUMBER_SYMBOLS,
+                KeyboardInputMode.HIRAGANA,
+            ),
+            callbacks.modeChanges,
+        )
+        assertEquals(KeyboardInputMode.HIRAGANA, view.inputMode)
+    }
+
     private fun createView(callbacks: RecordingCallbacks): JapaneseFlickKeyboardView {
         val context: Context = RuntimeEnvironment.getApplication()
         return JapaneseFlickKeyboardView(context, callbacks)
@@ -301,6 +323,12 @@ class JapaneseFlickKeyboardViewTest {
 
         override fun onEnter() = Unit
 
+        val modeChanges = mutableListOf<KeyboardInputMode>()
+
         override fun onNextKeyboard() = Unit
+
+        override fun onKeyboardModeChanged(mode: KeyboardInputMode) {
+            modeChanges += mode
+        }
     }
 }

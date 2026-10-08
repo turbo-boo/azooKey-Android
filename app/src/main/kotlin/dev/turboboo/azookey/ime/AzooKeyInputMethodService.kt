@@ -13,6 +13,7 @@ import java.util.concurrent.Executors
 
 class AzooKeyInputMethodService : InputMethodService() {
     private val controller = ImeController()
+    private val inputRouter = ImeTextInputRouter(controller)
     private val mainHandler = Handler(Looper.getMainLooper())
     private val candidateWorker = Executors.newSingleThreadExecutor()
     private lateinit var candidateCoordinator: CandidateCoordinator
@@ -82,11 +83,17 @@ class AzooKeyInputMethodService : InputMethodService() {
             callbacks = object : JapaneseFlickKeyboardView.Callbacks {
                 override fun onText(text: String) {
                     withEditorConnection { connection ->
-                        if (inputPolicy.directInput) {
-                            connection.commitText(text)
-                        } else {
-                            controller.input(text, connection)
+                        val needsCandidates = inputRouter.input(
+                            text = text,
+                            mode = keyboardView?.inputMode ?: KeyboardInputMode.HIRAGANA,
+                            policy = inputPolicy,
+                            connection = connection,
+                        )
+                        if (needsCandidates) {
                             refreshCandidates()
+                        } else {
+                            candidateCoordinator.clear()
+                            updateEnterKeyPresentation()
                         }
                     }
                 }
@@ -139,6 +146,14 @@ class AzooKeyInputMethodService : InputMethodService() {
                     }
                 }
 
+                override fun onKeyboardModeChanged(mode: KeyboardInputMode) {
+                    withEditorConnection { connection ->
+                        controller.commit(connection)
+                    }
+                    candidateCoordinator.clear()
+                    updateEnterKeyPresentation()
+                }
+
                 override fun onNextKeyboard() {
                     val switched = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                         switchToNextInputMethod(false)
@@ -154,7 +169,9 @@ class AzooKeyInputMethodService : InputMethodService() {
         )
         keyboardView = view
         updateEnterKeyPresentation()
-        if (inputPolicy.allowSuggestions) {
+        if (inputPolicy.allowSuggestions &&
+            keyboardView?.inputMode == KeyboardInputMode.HIRAGANA
+        ) {
             candidateCoordinator.request(controller.composingText)
         } else {
             candidateCoordinator.clear()
@@ -170,7 +187,9 @@ class AzooKeyInputMethodService : InputMethodService() {
 
     private fun refreshCandidates() {
         updateEnterKeyPresentation()
-        if (inputPolicy.allowSuggestions) {
+        if (inputPolicy.allowSuggestions &&
+            keyboardView?.inputMode == KeyboardInputMode.HIRAGANA
+        ) {
             candidateCoordinator.request(controller.composingText)
         } else {
             candidateCoordinator.clear()
