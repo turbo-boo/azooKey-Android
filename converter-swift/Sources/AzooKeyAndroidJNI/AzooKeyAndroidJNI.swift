@@ -1,0 +1,415 @@
+import Foundation
+import KanaKanjiConverterModule
+
+/*
+ * JNI-facing adapter for AzooKeyKanaKanjiConverter.
+ *
+ * Upstream:
+ *   azooKey/AzooKeyKanaKanjiConverter
+ * Revision:
+ *   d59a28e4c7ca049aef04f29a91eae9677a7753f2
+ * Original author: Miwa / Ensan
+ * License: MIT
+ *
+ * The dictionary is supplied as an Android filesystem path instead of using
+ * Bundle.module so the same code works when packaged inside an APK/AAR.
+ */
+public func candidatesJSON(
+    _ input: String,
+    _ dictionaryPath: String
+) -> String {
+    guard !input.isEmpty, !dictionaryPath.isEmpty else {
+        return "[]"
+    }
+
+    return AndroidConverterStorage.shared.withConverter(
+        dictionaryPath: dictionaryPath
+    ) { converter, workingDirectory in
+        var composingText = ComposingText()
+        composingText.insertAtCursorPosition(input, inputStyle: .direct)
+
+        let result = converter.requestCandidates(
+            composingText,
+            options: ConvertRequestOptions(
+                N_best: 10,
+                requireJapanesePrediction: .autoMix,
+                requireEnglishPrediction: .disabled,
+                keyboardLanguage: .ja_JP,
+                englishCandidateInRoman2KanaInput: false,
+                fullWidthRomanCandidate: false,
+                halfWidthKanaCandidate: false,
+                learningType: .inputAndOutput,
+                maxMemoryCount: 65536,
+                shouldResetMemory: false,
+                memoryDirectoryURL: workingDirectory,
+                sharedContainerURL: workingDirectory,
+                textReplacer: .empty,
+                specialCandidateProviders: nil,
+                metadata: .init(versionString: "azooKey-Android")
+            )
+        )
+
+        let candidates = Array(result.mainResults.prefix(10).map(\.text))
+        guard let encoded = try? JSONEncoder().encode(candidates) else {
+            return "[]"
+        }
+        return String(decoding: encoded, as: UTF8.self)
+    }
+}
+
+public func conversionBridgeJSON(
+    _ input: String,
+    _ dictionaryPath: String
+) -> String {
+    guard !input.isEmpty, !dictionaryPath.isEmpty else {
+        return #"{"candidates":[],"path":[]}"#
+    }
+
+    return AndroidConverterStorage.shared.withConverter(
+        dictionaryPath: dictionaryPath
+    ) { converter, workingDirectory in
+        var composingText = ComposingText()
+        composingText.insertAtCursorPosition(input, inputStyle: .direct)
+
+        let result = converter.requestCandidates(
+            composingText,
+            options: ConvertRequestOptions(
+                N_best: 10,
+                requireJapanesePrediction: .disabled,
+                requireEnglishPrediction: .disabled,
+                keyboardLanguage: .ja_JP,
+                englishCandidateInRoman2KanaInput: false,
+                fullWidthRomanCandidate: false,
+                halfWidthKanaCandidate: false,
+                learningType: .inputAndOutput,
+                maxMemoryCount: 65536,
+                shouldResetMemory: false,
+                memoryDirectoryURL: workingDirectory,
+                sharedContainerURL: workingDirectory,
+                textReplacer: .empty,
+                specialCandidateProviders: nil,
+                metadata: .init(versionString: "azooKey-Android")
+            )
+        )
+
+        let targetRuby = dictionaryReading(input)
+        let pathCandidate = result.mainResults.first {
+            !$0.data.isEmpty && $0.data.map(\.ruby).joined() == targetRuby
+        } ?? result.mainResults.first {
+            !$0.data.isEmpty
+        }
+        let candidates = Array(result.mainResults.prefix(10)).map {
+            ScoredCandidateWire(
+                text: $0.text,
+                value: Float($0.value),
+                exactRuby: !$0.data.isEmpty && $0.data.map(\.ruby).joined() == targetRuby
+            )
+        }
+        let path = pathCandidate?.data.map {
+            PredictionPathElementWire(
+                word: $0.word,
+                ruby: $0.ruby,
+                lcid: $0.lcid,
+                rcid: $0.rcid,
+                mid: $0.mid,
+                value: Float($0.value())
+            )
+        } ?? []
+
+        let wire = ConversionBridgeWire(
+            candidates: candidates,
+            path: path
+        )
+        guard let encoded = try? JSONEncoder().encode(wire) else {
+            return #"{"candidates":[],"path":[]}"#
+        }
+        return String(decoding: encoded, as: UTF8.self)
+    }
+}
+
+public func replaceUserDictionaryJSON(
+    _ json: String,
+    _ dictionaryPath: String
+) -> Bool {
+    guard !dictionaryPath.isEmpty,
+          let data = json.data(using: .utf8),
+          let entries = try? JSONDecoder().decode([UserDictionaryEntryWire].self, from: data)
+    else {
+        return false
+    }
+
+    return AndroidConverterStorage.shared.withConverter(
+        dictionaryPath: dictionaryPath
+    ) { converter, _ in
+        converter.importDynamicUserDictionary(
+            entries.compactMap { entry in
+                let reading = dictionaryReading(entry.reading.trimmingCharacters(in: .whitespacesAndNewlines))
+                let word = entry.word.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !reading.isEmpty, !word.isEmpty else {
+                    return nil
+                }
+                return DicdataElement(
+                    word: word,
+                    ruby: reading,
+                    cid: CIDData.固有名詞.cid,
+                    mid: MIDData.一般.mid,
+                    value: -10
+                )
+            }
+        )
+        return true
+    }
+}
+
+public func learnCandidate(
+    _ input: String,
+    _ candidateText: String,
+    _ dictionaryPath: String
+) -> Bool {
+    guard !input.isEmpty, !candidateText.isEmpty, !dictionaryPath.isEmpty else {
+        return false
+    }
+
+    return AndroidConverterStorage.shared.withConverter(
+        dictionaryPath: dictionaryPath
+    ) { converter, workingDirectory in
+        var composingText = ComposingText()
+        composingText.insertAtCursorPosition(input, inputStyle: .direct)
+
+        let result = converter.requestCandidates(
+            composingText,
+            options: ConvertRequestOptions(
+                N_best: 10,
+                requireJapanesePrediction: .manualMix,
+                requireEnglishPrediction: .disabled,
+                keyboardLanguage: .ja_JP,
+                englishCandidateInRoman2KanaInput: false,
+                fullWidthRomanCandidate: false,
+                halfWidthKanaCandidate: false,
+                learningType: .inputAndOutput,
+                maxMemoryCount: 65536,
+                shouldResetMemory: false,
+                memoryDirectoryURL: workingDirectory,
+                sharedContainerURL: workingDirectory,
+                textReplacer: .empty,
+                specialCandidateProviders: nil,
+                metadata: .init(versionString: "azooKey-Android")
+            )
+        )
+        guard let candidate = (result.mainResults + result.predictionResults)
+            .first(where: { $0.text == candidateText })
+        else {
+            return false
+        }
+
+        converter.setCompletedData(candidate)
+        converter.updateLearningData(candidate)
+        converter.commitUpdateLearningData()
+        converter.stopComposition()
+        return true
+    }
+}
+
+public func resetLearningMemory(
+    _ dictionaryPath: String
+) -> Bool {
+    guard !dictionaryPath.isEmpty else {
+        return false
+    }
+
+    return AndroidConverterStorage.shared.withConverter(
+        dictionaryPath: dictionaryPath
+    ) { converter, _ in
+        converter.resetMemory()
+        converter.stopComposition()
+        return true
+    }
+}
+
+public func predictionCandidatesJSON(
+    _ input: String,
+    _ dictionaryPath: String
+) -> String {
+    guard !input.isEmpty, !dictionaryPath.isEmpty else {
+        return "[]"
+    }
+
+    return AndroidConverterStorage.shared.withConverter(
+        dictionaryPath: dictionaryPath
+    ) { converter, workingDirectory in
+        var composingText = ComposingText()
+        composingText.insertAtCursorPosition(input, inputStyle: .direct)
+
+        let result = converter.requestCandidates(
+            composingText,
+            options: ConvertRequestOptions(
+                N_best: 10,
+                requireJapanesePrediction: .manualMix,
+                requireEnglishPrediction: .disabled,
+                keyboardLanguage: .ja_JP,
+                englishCandidateInRoman2KanaInput: false,
+                fullWidthRomanCandidate: false,
+                halfWidthKanaCandidate: false,
+                learningType: .inputAndOutput,
+                maxMemoryCount: 65536,
+                shouldResetMemory: false,
+                memoryDirectoryURL: workingDirectory,
+                sharedContainerURL: workingDirectory,
+                textReplacer: .empty,
+                specialCandidateProviders: nil,
+                metadata: .init(versionString: "azooKey-Android")
+            )
+        )
+
+        let candidates = Array(result.predictionResults.prefix(3).map(\.text))
+        guard let encoded = try? JSONEncoder().encode(candidates) else {
+            return "[]"
+        }
+        return String(decoding: encoded, as: UTF8.self)
+    }
+}
+
+
+private struct UserDictionaryEntryWire: Decodable {
+    let reading: String
+    let word: String
+}
+
+private struct ScoredCandidateWire: Encodable {
+    let text: String
+    let value: Float
+    let exactRuby: Bool
+}
+
+private struct ConversionBridgeWire: Encodable {
+    let candidates: [ScoredCandidateWire]
+    let path: [PredictionPathElementWire]
+}
+
+private struct PredictionPathElementWire: Encodable {
+    let word: String
+    let ruby: String
+    let lcid: Int
+    let rcid: Int
+    let mid: Int
+    let value: Float
+}
+
+private struct PredictionShadowWire: Encodable {
+    let predictions: [String]
+    let path: [PredictionPathElementWire]
+}
+
+private func dictionaryReading(_ input: String) -> String {
+    let units = input.utf16.map { unit -> UInt16 in
+        if 0x3041 <= unit && unit <= 0x3096 {
+            return unit + 0x60
+        }
+        return unit
+    }
+    return String(decoding: units, as: UTF16.self)
+}
+
+public func predictionShadowJSON(
+    _ input: String,
+    _ dictionaryPath: String
+) -> String {
+    guard !input.isEmpty, !dictionaryPath.isEmpty else {
+        return #"{"predictions":[],"path":[]}"#
+    }
+
+    return AndroidConverterStorage.shared.withConverter(
+        dictionaryPath: dictionaryPath
+    ) { converter, workingDirectory in
+        var composingText = ComposingText()
+        composingText.insertAtCursorPosition(input, inputStyle: .direct)
+
+        let result = converter.requestCandidates(
+            composingText,
+            options: ConvertRequestOptions(
+                N_best: 10,
+                requireJapanesePrediction: .manualMix,
+                requireEnglishPrediction: .disabled,
+                keyboardLanguage: .ja_JP,
+                englishCandidateInRoman2KanaInput: false,
+                fullWidthRomanCandidate: false,
+                halfWidthKanaCandidate: false,
+                learningType: .inputAndOutput,
+                maxMemoryCount: 65536,
+                shouldResetMemory: false,
+                memoryDirectoryURL: workingDirectory,
+                sharedContainerURL: workingDirectory,
+                textReplacer: .empty,
+                specialCandidateProviders: nil,
+                metadata: .init(versionString: "azooKey-Android")
+            )
+        )
+
+        let predictions = Array(result.predictionResults.prefix(3).map(\.text))
+        let targetRuby = dictionaryReading(input)
+        let pathCandidate = result.mainResults.first {
+            !$0.data.isEmpty && $0.data.map(\.ruby).joined() == targetRuby
+        } ?? result.mainResults.first {
+            !$0.data.isEmpty
+        }
+        let path = pathCandidate?.data.map {
+            PredictionPathElementWire(
+                word: $0.word,
+                ruby: $0.ruby,
+                lcid: $0.lcid,
+                rcid: $0.rcid,
+                mid: $0.mid,
+                value: Float($0.value())
+            )
+        } ?? []
+
+        let wire = PredictionShadowWire(
+            predictions: predictions,
+            path: path
+        )
+        guard let encoded = try? JSONEncoder().encode(wire) else {
+            return #"{"predictions":[],"path":[]}"#
+        }
+        return String(decoding: encoded, as: UTF8.self)
+    }
+}
+
+private final class AndroidConverterStorage: @unchecked Sendable {
+    static let shared = AndroidConverterStorage()
+
+    private let lock = NSLock()
+    private var dictionaryPath: String?
+    private var converter: KanaKanjiConverter?
+    private var workingDirectory: URL?
+
+    func withConverter<T>(
+        dictionaryPath: String,
+        operation: (KanaKanjiConverter, URL) -> T
+    ) -> T {
+        lock.lock()
+        defer { lock.unlock() }
+
+        if converter == nil || self.dictionaryPath != dictionaryPath {
+            let dictionaryURL = URL(
+                fileURLWithPath: dictionaryPath,
+                isDirectory: true
+            )
+            let stateDirectory = dictionaryURL
+                .deletingLastPathComponent()
+                .appendingPathComponent("learning-memory", isDirectory: true)
+            try? FileManager.default.createDirectory(
+                at: stateDirectory,
+                withIntermediateDirectories: true
+            )
+
+            converter = KanaKanjiConverter(
+                dictionaryURL: dictionaryURL,
+                preloadDictionary: true
+            )
+            self.dictionaryPath = dictionaryPath
+            self.workingDirectory = stateDirectory
+        }
+
+        return operation(converter!, workingDirectory!)
+    }
+}
